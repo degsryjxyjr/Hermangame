@@ -63,32 +63,105 @@
         const inventoryItems   = document.getElementById('inventoryItems');
         let inventoryData      = [];
 
+        // More reliable inventory toggle
         function toggleInventory() {
-            inventoryPanel.classList.toggle('hidden');
-            if (!inventoryPanel.classList.contains('hidden')) {
+            const panel = document.getElementById('inventoryPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+            
+            if (panel.style.display === 'block') {
                 sendMessage({ type: "inventory", action: "get" });
             }
         }
 
+        // Proper event listeners
+        document.getElementById('inventoryButton').addEventListener('click', function(e) {
+            e.preventDefault();
+            toggleInventory();
+        });
+
+        document.getElementById('closeInventory').addEventListener('click', function(e) {
+            e.preventDefault();
+            toggleInventory();
+        });
+
+        // Handle clicks outside inventory content
+        document.getElementById('inventoryPanel').addEventListener('click', function(e) {
+            if (e.target === this) { // Clicked on backdrop
+                toggleInventory();
+            }
+        });
+
         function handleInventoryData(items) {
-            inventoryData = items;
-            inventoryItems.innerHTML = '';
+            const container = document.getElementById('inventoryItems');
+            container.innerHTML = '';
+            if (!items || items.length === 0) {
+                container.innerHTML = '<div class="empty-inventory">Your inventory is empty</div>';
+                return;
+            }
+
             items.forEach(item => {
-                const el = document.createElement('div');
-                el.className = 'inventory-item';
-                el.dataset.itemId = item.id;
-                el.innerHTML = `
-                    <img src="${item.icon}" alt="${item.name}">
-                    <span class="item-name">${item.name}</span>
-                    ${item.quantity > 1 ? `<span class="item-quantity">${item.quantity}</span>` : ''}
-                `;
-                el.addEventListener('click', () => sendMessage({ type: "inventory", action: "use", itemId: item.id }));
-                inventoryItems.appendChild(el);
+                const itemEl = document.createElement('div');
+                itemEl.className = 'inventory-item';
+
+                // --- Create the image element ---
+                const imgEl = document.createElement('img');
+                imgEl.alt = item.name;
+                imgEl.className = 'item-icon'; // Optional: Add a class for styling
+
+                // --- Implement PNG/JPG fallback logic ---
+                // The C# code now sends a base path like "images/icons/itemId" or the default path
+                let basePath = item.icon || 'images/icons/default-item.jpg';
+
+                // Check if it's the default item; if so, load it directly without fallback
+                if (basePath === 'images/icons/default-item.jpg') {
+                    imgEl.src = basePath;
+                } else {
+                    // It's a specific item base path, assume no extension was sent
+                    // Try PNG first
+                    imgEl.src = `${basePath}.png`;
+
+                    // Set up the onerror handler to try JPG if PNG fails
+                    imgEl.onerror = function() {
+                        console.warn(`Failed to load PNG icon: ${this.src}. Trying JPG...`);
+                        // Change the source to the .jpg version
+                        this.src = `${basePath}.jpg`;
+                        // If JPG also fails, onerror will fire again.
+                        // We could set another onerror to load the final default,
+                        // or rely on the existing onerror in the original HTML which loads default-item.jpg
+                        // Let's add one more fallback to be sure:
+                        this.onerror = function() {
+                            console.warn(`Failed to load JPG icon: ${this.src}. Loading default.`);
+                            this.src = 'images/icons/default-item.jpg';
+                        };
+                    };
+                }
+
+                // --- Create other elements ---
+                const nameEl = document.createElement('span');
+                nameEl.className = 'item-name';
+                nameEl.textContent = item.name;
+
+                const quantityEl = document.createElement('span');
+                if (item.quantity > 1) {
+                    quantityEl.className = 'item-quantity';
+                    quantityEl.textContent = item.quantity;
+                }
+
+                // --- Assemble the item element ---
+                itemEl.appendChild(imgEl);
+                itemEl.appendChild(nameEl);
+                if (item.quantity > 1) {
+                    itemEl.appendChild(quantityEl);
+                }
+
+                // --- Add click listener ---
+                itemEl.addEventListener('click', () => {
+                    sendMessage({ type: "inventory", action: "use", itemId: item.id });
+                });
+
+                container.appendChild(itemEl);
             });
         }
-
-        inventoryButton.addEventListener('click', toggleInventory);
-        closeInventory.addEventListener('click', toggleInventory);
 
         /* ---- INVENTORY UI END---- */
 
@@ -180,6 +253,8 @@
                         case "Map":
                             document.getElementById('lobbyView').style.display = 'none';
                             document.getElementById('gameView').style.display = 'block';
+                            // Ensure inventory is hidden when game starts
+                            document.getElementById('inventoryPanel').style.display = 'none';
                             break;
                         case "Lobby":
                             document.getElementById('gameView').style.display = 'none';

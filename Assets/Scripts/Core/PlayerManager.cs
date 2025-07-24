@@ -72,6 +72,7 @@ public class PlayerManager : MonoBehaviour
                 case "reconnect":
                     HandleReconnect(sessionId, msg);
                     break;
+
                 case "start_game":
                     if (_lobby != null)
                     {
@@ -82,6 +83,18 @@ public class PlayerManager : MonoBehaviour
                         Debug.LogError("LobbyService reference is null when trying to start game");
                     }
                     break;
+
+                case "inventory":
+                    if (_inventory != null)
+                    {
+                        _inventory.HandleMessage(sessionId, msg);
+                    }
+                    else
+                    {
+                        Debug.LogError("InventoryService reference is null when trying to handle inventory message");
+                    }
+                    break;
+
                 default:
                     RouteMessageToService(sessionId, msg);
                     break;
