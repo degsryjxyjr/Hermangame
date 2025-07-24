@@ -12,10 +12,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2c0ce5d8a046a924aab36006beb8c2be, type: 3}
   m_Name: SimpleSword
   m_EditorClassIdentifier: 
-  itemName: Simple Sword
-  itemType: 0
+  itemId: 1
+  displayName: Sword
   icon: {fileID: 21300000, guid: 26e97d778d726a34b95aea264d4bd79f, type: 3}
-  modelPrefab: {fileID: 7235997375035445226, guid: 00b1f92888d602d48b48bdfe85abdc7b, type: 3}
-  healthBonus: 0
-  attackBonus: 10
+  itemType: 1
+  isStackable: 0
+  maxStack: 1
+  healthModifier: 0
+  attackModifier: 5
+  defenseModifier: 0
+  magicModifier: 0
   equipSlot: 1
+  modelPrefab: {fileID: 7235997375035445226, guid: 00b1f92888d602d48b48bdfe85abdc7b, type: 3}

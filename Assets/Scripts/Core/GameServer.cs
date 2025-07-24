@@ -45,6 +45,40 @@ public class GameServer : MonoBehaviour
         // This keeps the server responsive even when Unity window loses focus
         Application.runInBackground = true;
     }
+
+    private void OnApplicationQuit()
+    {
+        StopServers();
+    }
+
+    private void StopServers()
+    {
+        try
+        {
+            if (_httpServer != null)
+            {
+                if (_httpServer.IsListening)
+                {
+                    _httpServer.Stop();
+                }
+                _httpServer.Close();
+                _httpServer = null;
+            }
+            
+            if (_wsServer != null)
+            {
+                if (_wsServer.IsListening)
+                {
+                    _wsServer.Stop();
+                }
+                _wsServer = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Error stopping servers: {ex.Message}");
+        }
+    }
     public string GetRoomCode()
     {
         return roomCode;
@@ -167,27 +201,50 @@ public class GameServer : MonoBehaviour
             
             context.Response.ContentType = mimeType;
             context.Response.OutputStream.Write(fileBytes, 0, fileBytes.Length);
+            context.Response.Close();
             Debug.Log($"Served file: {normalizedPath}");
+            return;
         }
+         // Requested file does NOT exist
         else
         {
-            // Fallback to index.html for SPA routing
-            string fallbackPath = Path.Combine(webRoot, "index.html");
-            if (File.Exists(fallbackPath))
+            // --- Improved Fallback Logic using Accept header ---
+            string acceptHeader = context.Request.Headers["Accept"];
+            // Check if the client prefers HTML (indicating likely a page navigation)
+            bool wantsHtml = !string.IsNullOrEmpty(acceptHeader) && acceptHeader.Contains("text/html");
+
+            if (wantsHtml)
             {
-                byte[] fileBytes = File.ReadAllBytes(fallbackPath);
-                context.Response.ContentType = "text/html";
-                context.Response.OutputStream.Write(fileBytes, 0, fileBytes.Length);
-                Debug.Log($"Served fallback index.html for: {path}");
+                // Likely a navigation request for SPA, fallback to index.html is appropriate
+                string fallbackPath = Path.Combine(webRoot, "index.html");
+                if (File.Exists(fallbackPath))
+                {
+                    byte[] fileBytes = File.ReadAllBytes(fallbackPath);
+                    context.Response.ContentType = "text/html";
+                    context.Response.StatusCode = (int)HttpStatusCode.OK;
+                    context.Response.OutputStream.Write(fileBytes, 0, fileBytes.Length);
+                    context.Response.Close(); // Ensure response is closed
+                    Debug.Log($"[SPA Fallback] Served index.html for route: {path}");
+                    return; // Exit after serving fallback
+                }
+                else
+                {
+                    // Fallback file itself is missing
+                    Debug.LogError($"File not found: {normalizedPath} and fallback index.html also missing.");
+                    SendResponse(context, 404, "Not found");
+                    return;
+                }
             }
             else
             {
-                Debug.LogError($"File not found: {normalizedPath} and no fallback index.html");
-                SendResponse(context, 404, "Not found");
+                // Likely an asset request (image/css/js), fallback is misleading.
+                // Return a proper 404 error.
+                Debug.LogWarning($"Asset not found: {normalizedPath}. Client expected: {acceptHeader}");
+                SendResponse(context, 404, "Asset not found");
+                return; // Exit after sending 404
             }
+            // --- End of Improved Fallback Logic ---
         }
-        
-        context.Response.Close();
     }
 
     private string GetMimeType(string extension)
@@ -234,7 +291,20 @@ public class GameServer : MonoBehaviour
         lock (_mainThreadQueue)
         {
             while (_mainThreadQueue.Count > 0)
-                _mainThreadQueue.Dequeue()?.Invoke();
+            {
+                var action = _mainThreadQueue.Dequeue();
+                if (action != null)
+                {
+                    try
+                    {
+                        action.Invoke();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.LogError($"Exception in queued main thread action: {ex.Message}\n{ex.StackTrace}");
+                    }
+                }
+            }
         }
     }
 }
@@ -246,18 +316,31 @@ public class GameSocket : WebSocketBehavior
         try
         {
             var msg = JsonConvert.DeserializeObject<Dictionary<string, object>>(e.Data);
-            GameServer.Instance.QueueMainThread(() => 
-                PlayerManager.Instance.HandleNetworkMessage(ID, msg));
+            // Ensure HandleNetworkMessage also handles exceptions internally or wrap the call here
+            GameServer.Instance.QueueMainThread(() => {
+                try {
+                    PlayerManager.Instance.HandleNetworkMessage(ID, msg);
+                } catch (Exception ex) {
+                    Debug.LogError($"Exception in HandleNetworkMessage for {ID}: {ex.Message}\n{ex.StackTrace}");
+                }
+            });
         }
-        catch (Exception ex)
+        catch (Exception ex) // Catches deserialization errors or issues queueing
         {
-            Debug.LogError($"Message error: {ex.Message}");
+            Debug.LogError($"Error processing WebSocket message: {ex.Message}\n{ex.StackTrace}");
+            // Optionally send an error message back to the client
+            // Send(JsonConvert.SerializeObject(new { error = "Invalid message format" }));
         }
     }
 
     protected override void OnClose(CloseEventArgs e)
     {
-        GameServer.Instance.QueueMainThread(() => 
-            PlayerManager.Instance.HandleDisconnect(ID));
+        GameServer.Instance.QueueMainThread(() => {
+            try {
+                PlayerManager.Instance.HandleDisconnect(ID);
+            } catch (Exception ex) {
+                Debug.LogError($"Exception in HandleDisconnect for {ID}: {ex.Message}\n{ex.StackTrace}");
+            }
+        });
     }
 }

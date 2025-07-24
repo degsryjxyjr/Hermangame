@@ -10,17 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 2c0ce5d8a046a924aab36006beb8c2be, type: 3}
-  m_Name: New Item Definition
+  m_Name: SimpleStaff
   m_EditorClassIdentifier: 
-  itemId: 
-  displayName: 
-  icon: {fileID: 0}
+  itemId: 2
+  displayName: Staff
+  icon: {fileID: 21300000, guid: 942b85086ee299f4fb034f2edc787a83, type: 3}
   itemType: 0
-  isStackable: 1
+  isStackable: 0
   maxStack: 1
   healthModifier: 0
   attackModifier: 0
-  defenseModifier: 0
-  magicModifier: 0
-  equipSlot: 0
-  modelPrefab: {fileID: 0}
+  defenseModifier: 1
+  magicModifier: 5
+  equipSlot: 1
+  modelPrefab: {fileID: 7235997375035445226, guid: ad839b5a434be6348996ad94bccd20b4, type: 3}
