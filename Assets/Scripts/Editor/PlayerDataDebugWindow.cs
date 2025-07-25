@@ -1,8 +1,9 @@
-// Scripts/Editor/PlayerDataDebugWindow.cs
+// File: Scripts/Editor/PlayerDataDebugWindow.cs
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEngine;
-using System.Linq;
+using System.Collections.Generic;
+using System.Linq; // Make sure this is included
 
 public class PlayerDataDebugWindow : EditorWindow
 {
@@ -14,11 +15,13 @@ public class PlayerDataDebugWindow : EditorWindow
 
     private Vector2 scrollPos;
     private bool[] playerFoldouts;
-    private bool[] inventoryFoldouts;
+    private bool[] inventoryFoldouts; // One for bag, one for equipped per player
 
     void OnEnable()
     {
         playerFoldouts = new bool[0];
+        // Initialize with enough space for bag and equipped foldouts per player (2 per player)
+        // This is a simplification; a Dictionary<int, (bool, bool)> might be better for clarity
         inventoryFoldouts = new bool[0];
     }
 
@@ -26,121 +29,354 @@ public class PlayerDataDebugWindow : EditorWindow
     {
         if (!Application.isPlaying)
         {
-            GUILayout.Label("Game must be running to view player data");
-            return;
-        }
-
-        if (PlayerManager.Instance == null)
-        {
-            GUILayout.Label("Game services not initialized");
-            return;
-        }
-
-        var inventoryService = FindFirstObjectByType<InventoryService>();
-        if (inventoryService == null)
-        {
-            GUILayout.Label("InventoryService not found");
+            EditorGUILayout.HelpBox("This window only works in Play Mode.", MessageType.Info);
             return;
         }
 
         scrollPos = EditorGUILayout.BeginScrollView(scrollPos);
 
-        var allPlayers = PlayerManager.Instance.GetAllPlayers();
-        if (playerFoldouts.Length != allPlayers.Count)
+        var playerManager = PlayerManager.Instance;
+        var inventoryService = InventoryService.Instance;
+
+        if (playerManager == null)
         {
-            playerFoldouts = new bool[allPlayers.Count];
-            inventoryFoldouts = new bool[allPlayers.Count];
+            EditorGUILayout.HelpBox("PlayerManager not found.", MessageType.Warning);
+            EditorGUILayout.EndScrollView();
+            return;
         }
 
-        GUILayout.Label($"Active Players: {allPlayers.Count}", EditorStyles.boldLabel);
+        var players = playerManager.GetAllPlayers();
+        int playerCount = players.Count;
 
-        for (int i = 0; i < allPlayers.Count; i++)
+        // Resize foldout arrays if player count changed
+        if (playerFoldouts.Length != playerCount)
         {
-            var player = allPlayers[i];
-            playerFoldouts[i] = EditorGUILayout.Foldout(playerFoldouts[i], $"{player.LobbyData.Name} ({player.LobbyData.Role})");
+            System.Array.Resize(ref playerFoldouts, playerCount);
+            System.Array.Resize(ref inventoryFoldouts, playerCount * 2); // 2 foldouts per player (bag, equipped)
+        }
 
-            if (playerFoldouts[i])
-            {
-                DrawPlayerData(player, i, inventoryService);
-                EditorGUILayout.Space(10);
-            }
+        for (int i = 0; i < playerCount; i++)
+        {
+            DrawPlayerData(players[i], i, inventoryService);
         }
 
         EditorGUILayout.EndScrollView();
     }
 
-    private void DrawPlayerData(PlayerManager.PlayerConnection player, int playerIndex, InventoryService inventoryService)
+    private void DrawPlayerData(PlayerConnection player, int playerIndex, InventoryService inventoryService)
     {
         EditorGUILayout.BeginVertical("box");
-        
-        // Basic Info
-        EditorGUILayout.LabelField($"Player ID: {player.NetworkId}");
-        EditorGUILayout.LabelField($"Level: {player.GameData.level}");
-        EditorGUILayout.LabelField($"XP: {player.GameData.experience}");
-        
-        // Stats
-        EditorGUILayout.Space();
-        EditorGUILayout.LabelField("Stats", EditorStyles.boldLabel);
-        EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField($"Health: {player.GameData.stats.currentHealth}/{player.GameData.stats.maxHealth}");
-        EditorGUILayout.LabelField($"Attack: {player.GameData.stats.attack}");
-        EditorGUILayout.EndHorizontal();
-        EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField($"Defense: {player.GameData.stats.defense}");
-        EditorGUILayout.LabelField($"Magic: {player.GameData.stats.magic}");
-        EditorGUILayout.EndHorizontal();
-        
-        // Abilities
-        EditorGUILayout.Space();
-        if (player.GameData.unlockedAbilities.Count > 0)
-        {
-            EditorGUILayout.LabelField("Abilities", EditorStyles.boldLabel);
-            foreach (var ability in player.GameData.unlockedAbilities)
-            {
-                EditorGUILayout.LabelField($"- {ability.abilityName} (CD: {ability.cooldown}s)");
-            }
-        }
-        
-        // Inventory
-        EditorGUILayout.Space();
-        var inventory = inventoryService.GetInventory(player.NetworkId);
-        inventoryFoldouts[playerIndex] = EditorGUILayout.Foldout(inventoryFoldouts[playerIndex], $"Inventory ({inventory.Count}/{PlayerInventory.MAX_SLOTS})");
-
-        if (inventoryFoldouts[playerIndex])
+        playerFoldouts[playerIndex] = EditorGUILayout.Foldout(playerFoldouts[playerIndex], $"Player: {player.LobbyData?.Name ?? "Unknown"} (ID: {player.NetworkId})", true);
+        if (playerFoldouts[playerIndex])
         {
             EditorGUI.indentLevel++;
-            foreach (var slot in inventory)
+
+            // Basic Player Info
+            EditorGUILayout.LabelField("Session ID:", player.NetworkId);
+            EditorGUILayout.LabelField("Reconnect Token:", player.ReconnectToken ?? "None");
+            EditorGUILayout.LabelField("Last Activity:", player.LastActivityTime.ToString("F2"));
+
+            // Lobby Data
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Lobby Data", EditorStyles.boldLabel);
+            if (player.LobbyData != null)
             {
-                EditorGUILayout.BeginHorizontal();
-                
-                // Item icon and name
-                var content = new GUIContent(slot.ItemDef.displayName, slot.ItemDef.icon?.texture);
-                EditorGUILayout.LabelField(content, GUILayout.Width(150));
-                
-                // Stack info
-                if (slot.ItemDef.isStackable)
-                {
-                    EditorGUILayout.LabelField($"x{slot.quantity}", GUILayout.Width(40));
-                }
-                
-                // Equipment indicator
-                if (slot.isEquipped)
-                {
-                    EditorGUILayout.LabelField("(Equipped)", EditorStyles.miniLabel);
-                }
-                
-                // Quick action buttons
-                if (GUILayout.Button("Use", EditorStyles.miniButton, GUILayout.Width(40)))
-                {
-                    inventoryService.UseItem(player.NetworkId, slot.itemId);
-                }
-                
-                EditorGUILayout.EndHorizontal();
+                EditorGUILayout.LabelField("Name:", player.LobbyData.Name);
+                EditorGUILayout.LabelField("Role:", player.LobbyData.Role);
+                EditorGUILayout.LabelField("Is Ready:", player.LobbyData.IsReady.ToString());
             }
+            else
+            {
+                EditorGUILayout.LabelField("Lobby Data: None");
+            }
+
+            // Game Data (Stats)
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Game Stats", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("Class:", player.ClassDefinition?.className ?? "None");
+            EditorGUILayout.LabelField("Level:", player.Level.ToString());
+            EditorGUILayout.LabelField("Experience:", player.Experience.ToString());
+            EditorGUILayout.LabelField("Health:", $"{player.CurrentHealth}/{player.MaxHealth}");
+            EditorGUILayout.LabelField("Attack:", player.Attack.ToString());
+            EditorGUILayout.LabelField("Defense:", player.Defense.ToString());
+            EditorGUILayout.LabelField("Magic:", player.Magic.ToString());
+
+            // --- Updated Section: Inventory Actions ---
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Inventory Actions", EditorStyles.boldLabel);
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("Add Random Item"))
+            {
+                AddRandomItemToPlayer(player.NetworkId, inventoryService);
+            }
+            if (GUILayout.Button("Clear Inventory"))
+            {
+                ClearPlayerInventory(player.NetworkId, inventoryService);
+            }
+            EditorGUILayout.EndHorizontal();
+
+            // --- Updated Section: Inventory Display ---
+            EditorGUILayout.Space();
+#if UNITY_EDITOR // Ensure this code only compiles in the editor
+            PlayerInventory playerInventory = null;
+            bool hasInventory = inventoryService != null && inventoryService.TryGetPlayerInventory(player.NetworkId, out playerInventory);
+
+            if (hasInventory)
+            {
+                // Get bag and equipped items
+                var bagItems = playerInventory.GetAllBagItems();
+                var equippedItems = playerInventory.GetAllEquippedItems(); // Or access EquippedItems dict directly
+
+                // Combined count for display
+                int totalItemCount = bagItems.Count + equippedItems.Count;
+
+                // Indices for foldouts (2 per player: bag, equipped)
+                int bagFoldoutIndex = playerIndex * 2;
+                int equippedFoldoutIndex = playerIndex * 2 + 1;
+
+                EditorGUILayout.LabelField($"Inventory Summary: Total Items: {totalItemCount}, Bag: {bagItems.Count}, Equipped: {equippedItems.Count}, Max Bag Slots: {PlayerInventory.MAX_BAG_SLOTS}");
+
+                // Display Bag Items
+                inventoryFoldouts[bagFoldoutIndex] = EditorGUILayout.Foldout(inventoryFoldouts[bagFoldoutIndex], $"Bag Items ({bagItems.Count})", true);
+                if (inventoryFoldouts[bagFoldoutIndex])
+                {
+                    EditorGUI.indentLevel++;
+                    if (bagItems.Count > 0)
+                    {
+                        foreach (var slot in bagItems)
+                        {
+                            if (slot.ItemDef != null)
+                            {
+                                EditorGUILayout.BeginHorizontal();
+                                EditorGUILayout.LabelField($"{slot.ItemDef.displayName} (ID: {slot.itemId}, Qty: {slot.quantity}, Equipped: {slot.isEquipped})");
+                                // Use button (calls UseItem)
+                                if (GUILayout.Button("Use", EditorStyles.miniButton, GUILayout.Width(40)))
+                                {
+                                    bool useSuccess = inventoryService.UseItem(player.NetworkId, slot.itemId);
+                                    if (useSuccess)
+                                    {
+                                        Debug.Log($"Used item {slot.ItemDef.displayName} for {player.LobbyData.Name}");
+                                        // Repaint to reflect changes
+                                        Repaint();
+                                    }
+                                    else
+                                    {
+                                        Debug.LogWarning($"Failed to use item {slot.ItemDef.displayName} for {player.LobbyData.Name}");
+                                    }
+                                }
+                                // Remove button (calls RemoveItem)
+                                if (GUILayout.Button("Remove", EditorStyles.miniButton, GUILayout.Width(50)))
+                                {
+                                    bool removeSuccess = inventoryService.RemoveItem(player.NetworkId, slot.itemId, slot.quantity);
+                                    if (removeSuccess)
+                                    {
+                                        Debug.Log($"Removed item {slot.ItemDef.displayName} (x{slot.quantity}) from {player.LobbyData.Name}'s inventory");
+                                        Repaint();
+                                    }
+                                    else
+                                    {
+                                        Debug.LogWarning($"Failed to remove item {slot.ItemDef.displayName} from {player.LobbyData.Name}'s inventory");
+                                    }
+                                }
+                                EditorGUILayout.EndHorizontal();
+                            }
+                        }
+                    }
+                    else
+                    {
+                        EditorGUILayout.LabelField("Bag is empty.");
+                    }
+                    EditorGUI.indentLevel--;
+                }
+
+                // Display Equipped Items
+                EditorGUILayout.Space();
+                inventoryFoldouts[equippedFoldoutIndex] = EditorGUILayout.Foldout(inventoryFoldouts[equippedFoldoutIndex], $"Equipped Items ({equippedItems.Count})", true);
+                if (inventoryFoldouts[equippedFoldoutIndex])
+                {
+                    EditorGUI.indentLevel++;
+                    if (equippedItems.Count > 0)
+                    {
+                        foreach (var slot in equippedItems)
+                        {
+                            if (slot.ItemDef != null)
+                            {
+                                EditorGUILayout.BeginHorizontal();
+                                EditorGUILayout.LabelField($"{slot.ItemDef.displayName} (ID: {slot.itemId}, Slot: {slot.ItemDef.equipSlot}, Qty: {slot.quantity})");
+                                // Use/Equip button (toggles equip state)
+                                // UseItem should handle equipping from bag or unequipping if already equipped.
+                                // Since these items are in the equipped list, UseItem needs to find them.
+                                // Let's assume UseItem is updated or PlayerInventory.EquipItem can handle an equipped item ID to unequip it.
+                                if (GUILayout.Button("Unequip", EditorStyles.miniButton, GUILayout.Width(60))) // Specific action for equipped items
+                                {
+                                    // Call UseItem, which should delegate to PlayerInventory.EquipItem
+                                    // EquipItem logic: if item is in bag, equip it. If item is equipped, unequip it.
+                                    // We need to pass the itemId. PlayerInventory.EquipItem should find it in the equipped dict.
+                                    bool toggleSuccess = inventoryService.UseItem(player.NetworkId, slot.itemId);
+                                    if (toggleSuccess)
+                                    {
+                                        Debug.Log($"Toggled equipment (unequipped) for {slot.ItemDef.displayName} for {player.LobbyData.Name}");
+                                        Repaint();
+                                    }
+                                    else
+                                    {
+                                        Debug.LogWarning($"Failed to toggle equipment (unequip) for {slot.ItemDef.displayName} for {player.LobbyData.Name}");
+                                    }
+                                }
+                                EditorGUILayout.EndHorizontal();
+                            }
+                        }
+                    }
+                    else
+                    {
+                        EditorGUILayout.LabelField("Nothing equipped.");
+                    }
+                    EditorGUI.indentLevel--;
+                }
+
+            }
+            else
+            {
+                EditorGUILayout.LabelField("Inventory data not found for player.");
+            }
+#endif // UNITY_EDITOR
+            // --- End Updated Section ---
+
+            // Abilities (Placeholder, update if you have a different structure)
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Abilities", EditorStyles.boldLabel);
+            if (player.UnlockedAbilities != null && player.UnlockedAbilities.Count > 0)
+            {
+                foreach (var ability in player.UnlockedAbilities)
+                {
+                    EditorGUILayout.LabelField($"- {ability?.abilityName ?? "Unknown Ability"}");
+                }
+            }
+            else
+            {
+                EditorGUILayout.LabelField("No abilities unlocked.");
+            }
+
+
             EditorGUI.indentLevel--;
         }
-        
         EditorGUILayout.EndVertical();
     }
+
+    // --- Helper Methods for Inventory Actions (Updated) ---
+
+    private void AddRandomItemToPlayer(string playerId, InventoryService inventoryService)
+    {
+        // Find all ItemDefinitions in the project (Resources folder assumed)
+        ItemDefinition[] allItems = Resources.LoadAll<ItemDefinition>("Items");
+        if (allItems != null && allItems.Length > 0)
+        {
+            // Pick a random item
+            ItemDefinition randomItem = allItems[Random.Range(0, allItems.Length)];
+            // Add one copy of it
+            bool addSuccess = inventoryService.AddItem(playerId, randomItem, 1);
+            if (addSuccess)
+            {
+                Debug.Log($"Added random item '{randomItem.displayName}' to player {playerId}");
+                // Refresh the inventory display by forcing a repaint
+                Repaint();
+            }
+            else
+            {
+                Debug.LogWarning($"Failed to add random item '{randomItem.displayName}' to player {playerId}");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("No ItemDefinitions found in Resources/Items to add.");
+        }
+    }
+
+    private void ClearPlayerInventory(string playerId, InventoryService inventoryService)
+    {
+        // Get the PlayerInventory instance for this player using the new debug helper
+        PlayerInventory playerInventory = null;
+        bool hasInventory = inventoryService != null && inventoryService.TryGetPlayerInventory(playerId, out playerInventory);
+
+        if (hasInventory)
+        {
+            // Get a list of items to remove to avoid modifying during iteration
+            var bagItemsToRemove = new List<InventorySlot>(playerInventory.GetAllBagItems());
+            var equippedItemsToRemove = new List<InventorySlot>(playerInventory.GetAllEquippedItems());
+
+            bool allRemoved = true;
+
+            // Remove items from the bag
+            foreach (var slot in bagItemsToRemove)
+            {
+                if (slot != null)
+                {
+                    bool removeSuccess = inventoryService.RemoveItem(playerId, slot.itemId, slot.quantity);
+                    if (!removeSuccess)
+                    {
+                        Debug.LogWarning($"Failed to remove bag item {slot.itemId} while clearing inventory.");
+                        allRemoved = false;
+                    }
+                }
+            }
+
+            // Unequip items (which should move them to the bag) and then remove them
+            // Or, directly remove them from the equipped state.
+            // The safest way is to use the EquipItem logic to move them back to the bag, then clear the bag.
+            // However, PlayerInventory.EquipItem takes an item ID and finds it in the bag.
+            // We need to iterate the EquippedItems dictionary.
+            // Let's iterate the equipped items list and call EquipItem on each, which should unequip them.
+            foreach (var slot in equippedItemsToRemove)
+            {
+                if (slot != null)
+                {
+                     // Calling EquipItem on an equipped item should unequip it (move it back to bag or remove it)
+                     // This relies on the logic inside PlayerInventory.EquipItem.
+                     bool unequipSuccess = playerInventory.EquipItem(slot.itemId);
+                     if (!unequipSuccess)
+                     {
+                         Debug.LogWarning($"Failed to unequip item {slot.itemId} while clearing inventory.");
+                         allRemoved = false;
+                         // Even if unequip fails, we should still try to remove it from wherever it ended up
+                         // This is tricky without direct access. Let's assume EquipItem handles it or logs an error.
+                     }
+                     // After unequipping, the item should be back in the bag or removed.
+                     // If it's back in the bag, the bag clearing loop above should get it.
+                     // If EquipItem directly removes it, we don't need to do anything else here for this item.
+                }
+            }
+
+            // Re-fetch bag items after unequipping, in case the unequip process modified the bag
+            var bagItemsToRemoveAfterUnequip = new List<InventorySlot>(playerInventory.GetAllBagItems());
+            foreach (var slot in bagItemsToRemoveAfterUnequip)
+            {
+                if (slot != null)
+                {
+                    bool removeSuccess = inventoryService.RemoveItem(playerId, slot.itemId, slot.quantity);
+                    if (!removeSuccess)
+                    {
+                        Debug.LogWarning($"Failed to remove bag item {slot.itemId} (after unequipping) while clearing inventory.");
+                        allRemoved = false;
+                    }
+                }
+            }
+
+            if (allRemoved)
+            {
+                Debug.Log($"Cleared inventory for player {playerId}");
+            }
+            else
+            {
+                Debug.LogWarning($"Attempted to clear inventory for player {playerId}, but some items failed to remove/unequip.");
+            }
+            // Refresh the inventory display by forcing a repaint
+            Repaint();
+        }
+        else
+        {
+            Debug.Log($"Inventory for player {playerId} not found or already empty.");
+        }
+    }
+    // --- End Helper Methods ---
 }
 #endif

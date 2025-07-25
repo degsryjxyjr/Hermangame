@@ -28,5 +28,7 @@ public class PlayerClassDefinition : ScriptableObject
     [Header("Progression")]
     public AnimationCurve healthGrowth;
     public AnimationCurve attackGrowth;
+    public AnimationCurve defenseGrowth;
+    public AnimationCurve magicGrowth;
     // Add other growth curves as needed
 }

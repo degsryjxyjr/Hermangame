@@ -38,7 +38,7 @@ public class LobbyUI : MonoBehaviour
         }
     }
 
-    public void UpdatePlayers(List<PlayerManager.PlayerConnection> players, bool canStart)
+    public void UpdatePlayers(List<PlayerConnection> players, bool canStart)
     {
         // Clear existing entries
         foreach (Transform child in playerListContainer)
@@ -50,7 +50,7 @@ public class LobbyUI : MonoBehaviour
         foreach (var player in players)
         {
             var entry = Instantiate(playerEntryPrefab, playerListContainer);
-            var entryScript = entry.GetComponent<PlayerEntry>();
+            var entryScript = entry.GetComponent<PlayerUIEntry>();
             entryScript.Initialize(player.LobbyData.Name, player.LobbyData.Role);
             entryScript.SetReadyState(player.LobbyData.IsReady);
         }

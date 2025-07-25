@@ -12,16 +12,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2c0ce5d8a046a924aab36006beb8c2be, type: 3}
   m_Name: HealthPotion
   m_EditorClassIdentifier: 
-  itemId: 3
+  itemId: health_potion_01
   displayName: Health Potion
   icon: {fileID: 21300000, guid: 9443509c6be388b42ae7a61b3e4e3ee9, type: 3}
   itemType: 0
   isStackable: 1
   maxStack: 4
-  healthModifier: 50
-  attackModifier: 5
-  defenseModifier: 5
-  magicModifier: 5
-  linkedAbility: {fileID: 0}
+  healthModifier: 0
+  attackModifier: 0
+  defenseModifier: 0
+  magicModifier: 0
+  linkedAbility: {fileID: 11400000, guid: 6512ec4da27542b47867c4c43d3f08a5, type: 2}
   equipSlot: 0
   modelPrefab: {fileID: 7235997375035445226, guid: 4d79d2118e8a7f4408474b447ee395f8, type: 3}

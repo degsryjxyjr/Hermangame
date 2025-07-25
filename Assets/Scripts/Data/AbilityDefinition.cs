@@ -25,6 +25,11 @@ public class AbilityDefinition : ScriptableObject
     [Tooltip("The core numerical effect. Negative values typically indicate healing.")]
     public int baseEffectValue; // Renamed from baseDamage for clarity
 
+    [Header("Effect Logic")]
+    [Tooltip("Drag a GameObject with an IAbilityEffect script attached here. This defines what the ability actually does.")]
+    public GameObject effectLogicSource; // Reference to a GameObject holding the effect script
+
+
     [Header("Visuals & Animation")]
     public GameObject effectPrefab;
     public string animationTrigger;

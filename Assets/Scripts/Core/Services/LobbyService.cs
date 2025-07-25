@@ -8,7 +8,7 @@ public class LobbyService : MonoBehaviour
 {
     public static LobbyService Instance { get; private set; }
 
-    private List<PlayerManager.PlayerConnection> _players = new();
+    private List<PlayerConnection> _players = new();
 
     void Awake()
     {
@@ -20,7 +20,7 @@ public class LobbyService : MonoBehaviour
         Instance = this;
     }
 
-    public void AddPlayer(PlayerManager.PlayerConnection player)
+    public void AddPlayer(PlayerConnection player)
     {
         if (!_players.Contains(player))
         {
@@ -29,13 +29,13 @@ public class LobbyService : MonoBehaviour
         }
     }
 
-    public void OnPlayerDisconnected(PlayerManager.PlayerConnection player)
+    public void OnPlayerDisconnected(PlayerConnection player)
     {
         _players.RemoveAll(p => p.NetworkId == player.NetworkId);
         UpdateLobbyState();
     }
 
-    public void OnPlayerReconnected(PlayerManager.PlayerConnection player)
+    public void OnPlayerReconnected(PlayerConnection player)
     {
         if (!_players.Contains(player))
         {
@@ -44,7 +44,7 @@ public class LobbyService : MonoBehaviour
         }
     }
 
-    public void HandleMessage(PlayerManager.PlayerConnection player, Dictionary<string, object> msg)
+    public void HandleMessage(PlayerConnection player, Dictionary<string, object> msg)
     {
         if (player == null || msg == null)
         {

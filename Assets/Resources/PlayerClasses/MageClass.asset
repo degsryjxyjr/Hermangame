@@ -22,11 +22,10 @@ MonoBehaviour:
   attackRange: 1
   characterPrefab: {fileID: 7235997375035445226, guid: 8ae16999080efa54ba8dd2e0466ad3dc, type: 3}
   animatorController: {fileID: 0}
-  startingAbilities: []
+  startingAbilities:
+  - {fileID: 11400000, guid: e2ca85e47cf37814da14dd9ee4cbd0fe, type: 2}
   startingEquipment:
   - {fileID: 11400000, guid: 69927346d4c63504cb76633e9f940e05, type: 2}
-  - {fileID: 11400000, guid: fd2c4ce97e15b844e9c12540a71dda30, type: 2}
-  - {fileID: 11400000, guid: fd2c4ce97e15b844e9c12540a71dda30, type: 2}
   healthGrowth:
     serializedVersion: 2
     m_Curve:
@@ -72,6 +71,18 @@ MonoBehaviour:
       weightedMode: 0
       inWeight: 0
       outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  defenseGrowth:
+    serializedVersion: 2
+    m_Curve: []
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  magicGrowth:
+    serializedVersion: 2
+    m_Curve: []
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4

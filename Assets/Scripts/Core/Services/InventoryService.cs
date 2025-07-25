@@ -1,13 +1,14 @@
 using UnityEngine;
 using System.Collections.Generic;
-using System.Linq;
+using System.Linq; // If needed
+using System;
 
 public class InventoryService : MonoBehaviour
 {
     public static InventoryService Instance { get; private set; }
-    
-    // Key: Player Session ID, Value: Their inventory
-    private Dictionary<string, PlayerInventory> _playerInventories = new();
+
+    // Key: Player Network ID, Value: Their inventory state
+    private Dictionary<string, PlayerInventory> _playerInventories = new Dictionary<string, PlayerInventory>();
 
     private void Awake()
     {
@@ -22,30 +23,21 @@ public class InventoryService : MonoBehaviour
         Debug.Log("InventoryService initialized and set as singleton");
     }
 
+    // --- Initialization ---
     /// <summary>
     /// Initializes a player's inventory with starting items.
     /// </summary>
     public void InitializeInventory(string playerId, List<ItemDefinition> startingItems)
     {
         var inventory = new PlayerInventory();
-        foreach (var item in startingItems)
-        {
-            if (item != null)
-            {
-                // AddItem method in PlayerInventory now handles ItemDefinition correctly
-                inventory.AddItem(item); 
-            }
-            else
-            {
-                Debug.LogWarning($"Null item found in starting items for player {playerId}");
-            }
-        }
+        inventory.InitializeWithItems(startingItems);
         _playerInventories[playerId] = inventory;
         Debug.Log($"Initialized inventory for player {playerId} with {startingItems.Count} starting items.");
     }
 
+    // --- Item Management ---
     /// <summary>
-    /// Adds an item to a player's inventory.
+    /// Adds an item to a player's bag inventory.
     /// </summary>
     public bool AddItem(string playerId, ItemDefinition item, int quantity = 1)
     {
@@ -58,19 +50,26 @@ public class InventoryService : MonoBehaviour
         bool success = true;
         for (int i = 0; i < quantity; i++)
         {
-             // PlayerInventory.AddItem now takes ItemDefinition
-            if (!inventory.AddItem(item)) 
+            if (!inventory.AddItemToBag(item))
             {
-                success = false; // Might fail if inventory is full or item is null
-                // Depending on design, you might want to stop adding if one fails,
-                // or continue trying to add others. Here we continue but track success.
+                success = false;
+                Debug.LogWarning($"Failed to add item {item?.displayName ?? "Unknown"} to {playerId}'s inventory. Inventory full or item null?");
+                // Depending on design, stop adding or continue?
+                break; // Stop on first failure for this example
             }
+        }
+
+        if (success)
+        {
+            // TODO: Notify client about inventory change if needed immediately
+            // Or rely on the caller to send updates
         }
         return success;
     }
 
+    // --- Item Usage ---
     /// <summary>
-    /// Uses an item from a player's inventory (e.g., consumes a potion or equips gear).
+    /// Uses an item from a player's inventory (e.g., consumes a potion or toggles equipment).
     /// </summary>
     public bool UseItem(string playerId, string itemId)
     {
@@ -79,12 +78,21 @@ public class InventoryService : MonoBehaviour
             Debug.LogWarning($"Cannot use item, inventory not found for player: {playerId}");
             return false;
         }
-        var slot = inventory.GetSlot(itemId);
-        if (slot == null || slot.ItemDef == null)
+
+        // Check bag first
+        var bagSlot = inventory.GetBagSlot(itemId);
+        if (bagSlot == null || bagSlot.ItemDef == null)
         {
-            Debug.Log($"Cannot use item, slot or ItemDef not found for ID: {itemId}");
+            // If not in bag, check if it's an equipped item being unequipped
+            // The EquipItem logic handles toggling, so we can try to "equip" it again,
+            // which will unequip it if it's already equipped.
+            // However, UseItem is generally for consumables or equipping from bag.
+            // Let's assume UseItem for equipment means Equip/Unequip from bag.
+            // If the item isn't in the bag, it can't be used this way.
+            Debug.Log($"Cannot use item, slot or ItemDef not found for ID: {itemId} in player {playerId}'s bag.");
             return false;
         }
+
         var player = PlayerManager.Instance.GetPlayer(playerId);
         if (player == null)
         {
@@ -93,120 +101,110 @@ public class InventoryService : MonoBehaviour
         }
 
         bool itemUsed = false;
-        switch (slot.ItemDef.itemType)
+        switch (bagSlot.ItemDef.itemType)
         {
             case ItemDefinition.ItemType.Consumable:
-                Debug.Log($"Using consumable: {slot.ItemDef.displayName} (ID: {slot.itemId}) for player {player.LobbyData.Name}");
+                Debug.Log($"Using consumable: {bagSlot.ItemDef.displayName} (ID: {bagSlot.itemId}) for player {player.LobbyData.Name}");
 
-                // --- NEW LOGIC FOR OPTION B (Corrected) ---
-                // Check if the item has a linked ability
-                if (slot.ItemDef.linkedAbility != null)
+                bool itemConsumed = false;
+                if (bagSlot.ItemDef.linkedAbility != null)
                 {
-                    Debug.Log($"Consumable {slot.ItemDef.displayName} has a linked ability: {slot.ItemDef.linkedAbility.abilityName}. Executing ability logic.");
+                    Debug.Log($"Consumable {bagSlot.ItemDef.displayName} has a linked ability: {bagSlot.ItemDef.linkedAbility.abilityName}. Executing via CombatService.");
 
-                    // Execute the linked ability's logic using the CORRECTED method name
-                    // Pass 'playerId' as both the caster and the target for self-targeting consumables
                     bool abilityExecuted = CombatService.Instance.ExecuteAbilityFromItem(
                         casterPlayerId: playerId,
                         targetPlayerId: playerId, // Self-targeting for potions
-                        abilityDefinition: slot.ItemDef.linkedAbility
+                        abilityDefinition: bagSlot.ItemDef.linkedAbility
                     );
 
                     if (abilityExecuted)
                     {
-                        // Consume the item only if the ability executed successfully
-                        itemUsed = inventory.RemoveItem(itemId, 1);
-                        if (itemUsed)
+                        itemConsumed = inventory.RemoveItemFromBag(itemId, 1);
+                        if (itemConsumed)
                         {
-                            Debug.Log($"Consumed item {slot.ItemDef.displayName} after using linked ability. New quantity: {slot.quantity - 1}");
+                            Debug.Log($"Successfully consumed item {bagSlot.ItemDef.displayName} after linked ability execution.");
                         }
                         else
                         {
-                            Debug.LogWarning($"Failed to remove consumed item {slot.ItemDef.displayName} from inventory after ability use.");
+                            Debug.LogWarning($"Failed to remove consumed item {bagSlot.ItemDef.displayName} from inventory after ability use.");
                         }
                     }
                     else
                     {
-                        Debug.LogWarning($"Linked ability {slot.ItemDef.linkedAbility.abilityName} failed to execute for item {slot.ItemDef.displayName}.");
-                        itemUsed = false; // Indicate failure
+                        Debug.LogWarning($"Linked ability {bagSlot.ItemDef.linkedAbility.abilityName} failed to execute for item {bagSlot.ItemDef.displayName}. Item not consumed.");
                     }
                 }
                 else
                 {
-                    // Fallback to original simple stat modifier logic if no linked ability
-                    Debug.Log($"Consumable {slot.ItemDef.displayName} has no linked ability. Applying direct stat modifiers.");
+                    Debug.Log($"Consumable {bagSlot.ItemDef.displayName} has no linked ability. Applying direct stat modifiers (fallback).");
 
-                    // Apply stats modifiers (original logic)
-                    player.GameData.stats.currentHealth = Mathf.Clamp(
-                        player.GameData.stats.currentHealth + slot.ItemDef.healthModifier,
+                    player.CurrentHealth = Mathf.Clamp(
+                        player.CurrentHealth + bagSlot.ItemDef.healthModifier,
                         0,
-                        player.GameData.stats.maxHealth
+                        player.MaxHealth
                     );
-                    player.GameData.stats.attack += slot.ItemDef.attackModifier;
-                    player.GameData.stats.defense += slot.ItemDef.defenseModifier;
-                    player.GameData.stats.magic += slot.ItemDef.magicModifier;
+                    player.Attack += bagSlot.ItemDef.attackModifier;
+                    player.Defense += bagSlot.ItemDef.defenseModifier;
+                    player.Magic += bagSlot.ItemDef.magicModifier;
 
-                    // Consume the item (reduce quantity/remove slot)
-                    itemUsed = inventory.RemoveItem(itemId, 1);
-                    if (itemUsed)
+                    GameServer.Instance.SendToPlayer(player.NetworkId, new
                     {
-                        Debug.Log($"Consumed item {slot.ItemDef.displayName} using direct modifiers. New quantity: {slot.quantity - 1}");
+                        type = "stats_update",
+                        currentHealth = player.CurrentHealth,
+                        maxHealth = player.MaxHealth,
+                        attack = player.Attack,
+                        defense = player.Defense,
+                        magic = player.Magic
+                    });
+
+                    itemConsumed = inventory.RemoveItemFromBag(itemId, 1);
+                    if (itemConsumed)
+                    {
+                        Debug.Log($"Consumed item {bagSlot.ItemDef.displayName} using direct modifiers.");
                     }
                     else
                     {
-                        Debug.LogWarning($"Failed to remove consumed item {slot.ItemDef.displayName} from inventory after direct modifier use.");
+                        Debug.LogWarning($"Failed to remove consumed item {bagSlot.ItemDef.displayName} from inventory after direct modifier use.");
                     }
                 }
-                // --- END NEW LOGIC ---
+                itemUsed = itemConsumed;
                 break;
 
             case ItemDefinition.ItemType.Equipment:
-                Debug.Log($"Toggling equipment: {slot.ItemDef.displayName} (ID: {slot.itemId}) for player {player.LobbyData.Name}");
-                // Equip/Unequip item
+                Debug.Log($"Toggling equipment: {bagSlot.ItemDef.displayName} (ID: {bagSlot.itemId}) for player {player.LobbyData.Name}");
+                // Delegate to the inventory's equip logic
                 itemUsed = inventory.EquipItem(itemId);
                 if (itemUsed)
                 {
-                    Debug.Log($"{(slot.isEquipped ? "Equipped" : "Unequipped")} item {slot.ItemDef.displayName}.");
+                    // The EquipItem method handles the internal state change (isEquipped flag, movement between lists/dict)
+                    Debug.Log($"{(bagSlot.isEquipped ? "Unequipped" : "Equipped")} item {bagSlot.ItemDef.displayName}.");
+                    // TODO: Potentially apply/remove stat bonuses from equipment here
+                    // This would involve reading the item's modifiers and adjusting player stats
+                    // ApplyEquipmentBonuses(player, bagSlot.ItemDef, bagSlot.isEquipped); // isEquipped is now toggled
                 }
                 else
                 {
-                    Debug.LogWarning($"Failed to toggle equipment for item {slot.ItemDef.displayName}.");
+                    Debug.LogWarning($"Failed to toggle equipment for item {bagSlot.ItemDef.displayName}.");
                 }
                 break;
             default:
-                Debug.Log($"No use behavior defined for item type: {slot.ItemDef.itemType} (Item: {slot.ItemDef.displayName})");
-                itemUsed = false; // Indicate the "use" action wasn't processed meaningfully
+                Debug.Log($"No use behavior defined for item type: {bagSlot.ItemDef.itemType} (Item: {bagSlot.ItemDef.displayName})");
+                itemUsed = false;
                 break;
         }
-
-        return itemUsed; // Return whether the item was successfully used/processed
+        return itemUsed;
     }
 
-    /// <summary>
-    /// Gets a copy of a player's inventory items.
-    /// </summary>
-    public List<InventorySlot> GetInventory(string playerId)
-    {
-        if (_playerInventories.TryGetValue(playerId, out var inventory))
-        {
-            // Return a copy to prevent external modification of the internal list
-            return new List<InventorySlot>(inventory.GetAllItems()); 
-        }
-        Debug.LogWarning($"Cannot get inventory, not found for player: {playerId}");
-        return new List<InventorySlot>(); // Return empty list if not found
-    }
+    // --- Equipment Handling ---
+    // The core logic is now in PlayerInventory.EquipItem. InventoryService delegates to it.
+    // You might expose a direct Equip method if needed, but UseItem can handle it for now.
 
-    // --- New Method for PlayerManager to Route Messages ---
-    /// <summary>
-    /// Handles incoming inventory-related messages from a player client.
-    /// This method should be called by PlayerManager when an "inventory" message type is received.
-    /// </summary>
+    // --- Message Handling ---
     public void HandleMessage(string sessionId, Dictionary<string, object> msg)
     {
         if (!_playerInventories.ContainsKey(sessionId))
         {
             Debug.LogWarning($"Inventory message received for unknown player/session: {sessionId}");
-            // Optionally send an error message back to the client
             GameServer.Instance.SendToPlayer(sessionId, new { type = "error", message = "Player inventory not found." });
             return;
         }
@@ -220,7 +218,6 @@ public class InventoryService : MonoBehaviour
                     Debug.Log($"Player {sessionId} requested inventory data.");
                     SendInventoryUpdate(sessionId);
                     break;
-
                 case "use":
                     if (msg.TryGetValue("itemId", out var itemIdObj))
                     {
@@ -229,14 +226,13 @@ public class InventoryService : MonoBehaviour
                         bool success = UseItem(sessionId, itemId);
                         if (success)
                         {
-                            Debug.Log($"Item {itemId} used successfully by player {sessionId}. Sending inventory update.");
+                            // Send updated inventory state after successful use
                             SendInventoryUpdate(sessionId);
                             // TODO: Potentially send a message about the item's specific effect to the client/UI
                         }
                         else
                         {
                             Debug.Log($"Failed to use item {itemId} for player {sessionId}");
-                            // Optionally send an error message back to the client
                             GameServer.Instance.SendToPlayer(sessionId, new { type = "error", message = $"Failed to use item {itemId}." });
                         }
                     }
@@ -246,10 +242,17 @@ public class InventoryService : MonoBehaviour
                         GameServer.Instance.SendToPlayer(sessionId, new { type = "error", message = "Missing itemId for use action." });
                     }
                     break;
-
-                // Add cases for other actions like "equip", "discard", "drop" etc. if needed
-                // case "equip": ...
-                // case "discard": ...
+                // Add cases for other actions like "equip" (if separate from "use"), "discard", "drop" etc.
+                case "equip":
+                    if (msg.TryGetValue("itemId", out var equipItemIdObj))
+                    {
+                        string equipItemId = equipItemIdObj.ToString();
+                        // Use the existing logic or a new dedicated method
+                        bool equipSuccess = _playerInventories[sessionId].EquipItem(equipItemId);
+                        if (equipSuccess) SendInventoryUpdate(sessionId);
+                        // ... handle success/failure
+                    }
+                    break;
                 default:
                     Debug.LogWarning($"Unknown inventory action: {action}");
                     GameServer.Instance.SendToPlayer(sessionId, new { type = "error", message = $"Unknown inventory action: {action}" });
@@ -265,9 +268,9 @@ public class InventoryService : MonoBehaviour
 
     // --- Helper Method to Send Data to Client ---
     /// <summary>
-    /// Sends the current state of a player's inventory to their client.
+    /// Sends the current state of a player's inventory (bag and equipped) to their client.
     /// </summary>
-    private void SendInventoryUpdate(string playerId)
+    public void SendInventoryUpdate(string playerId)
     {
         if (!_playerInventories.TryGetValue(playerId, out var inventory))
         {
@@ -276,184 +279,149 @@ public class InventoryService : MonoBehaviour
         }
 
         var itemsToSend = new List<object>();
-        foreach (var slot in inventory.GetAllItems())
+        var equippedToSend = new Dictionary<string, object>(); // Key: Slot name, Value: Item data
+
+        // --- Prepare Bag Items ---
+        foreach (var slot in inventory.GetAllBagItems())
         {
-            // Ensure the ItemDef exists before trying to access its properties
-            if (slot.ItemDef != null) 
+            if (slot.ItemDef != null)
             {
-                
-                // Create an anonymous object or a specific DTO for the item data needed by the client
                 itemsToSend.Add(new
                 {
-                    id = slot.itemId, // Use the cached ID from the slot
-                    name = slot.ItemDef.displayName, // Get name from ItemDefinition
+                    id = slot.itemId,
+                    name = slot.ItemDef.displayName,
                     quantity = slot.quantity,
-                    // Use the calculated icon path
-                    icon = slot.ItemDef.icon != null ?
-                        $"images/icons/{slot.ItemDef.itemId}" : // Send base path WITHOUT extension
-                        "images/icons/default-item.jpg",
-                    // Add other properties the client needs
-                    isEquipped = slot.isEquipped,
-                    itemType = slot.ItemDef.itemType.ToString() // Send type for client-side logic if needed
+                    icon = slot.ItemDef.icon != null ? $"images/icons/{slot.ItemDef.itemId}" : "images/icons/default-item.jpg",
+                    isEquipped = slot.isEquipped // Might be redundant now, but send for client info
+                    // Add other bag-specific properties the client needs
                 });
+            }
+        }
+
+        // --- Prepare Equipped Items ---
+        foreach (var kvp in inventory.EquippedItems)
+        {
+            ItemDefinition.EquipmentSlot slotType = kvp.Key;
+            InventorySlot equippedSlot = kvp.Value;
+
+            if (equippedSlot != null && equippedSlot.ItemDef != null)
+            {
+                // Use the enum name as the key for the equipped slot on the client side
+                equippedToSend[slotType.ToString()] = new
+                {
+                    id = equippedSlot.itemId,
+                    name = equippedSlot.ItemDef.displayName,
+                    // quantity is usually 1 for equipped items, maybe not needed
+                    icon = equippedSlot.ItemDef.icon != null ? $"images/icons/{equippedSlot.ItemDef.itemId}" : "images/icons/default-item.jpg",
+                    isEquipped = equippedSlot.isEquipped // Should be true
+                    // Add other equipped-specific properties the client needs
+                };
             }
             else
             {
-                Debug.LogError($"Found InventorySlot with null ItemDef for player {playerId}. Slot ID: {slot.itemId}");
-                // Optionally add a placeholder or skip this slot
+                // Explicitly send null for empty slots if client expects it
+                // equippedToSend[slotType.ToString()] = null;
+                // Or just don't add the key, client assumes null/empty
             }
         }
 
         // Send the message via GameServer
         GameServer.Instance.SendToPlayer(playerId, new
         {
-            type = "inventory_update", // Match the client's expected message type
-            items = itemsToSend
+            type = "inventory_update",
+            items = itemsToSend, // List of bag items
+            equipped = equippedToSend // Dictionary of equipped items by slot
         });
-        Debug.Log($"Sent inventory update to player {playerId} ({itemsToSend.Count} items).");
+        Debug.Log($"Sent inventory update to player {playerId} ({itemsToSend.Count} bag items, {equippedToSend.Count} equipped items).");
     }
 
+    // --- Helper Methods (Optional) ---
+    /// <summary>
+    /// Finds the slot containing an item with the given ID (looks in bag).
+    /// </summary>
+    public InventorySlot GetBagSlot(string playerId, string itemId)
+    {
+        if (_playerInventories.TryGetValue(playerId, out var inventory))
+        {
+            return inventory.GetBagSlot(itemId);
+        }
+        return null;
+    }
 
-    // --- Optional: Method to remove items by ID (e.g., for selling/discarding) ---
+    /// <summary>
+    /// Removes items by ID (e.g., for selling/discarding from bag).
+    /// </summary>
     public bool RemoveItem(string playerId, string itemId, int quantity = 1)
     {
-         if (_playerInventories.TryGetValue(playerId, out var inventory))
-         {
-             return inventory.RemoveItem(itemId, quantity);
-         }
-         return false;
+        if (_playerInventories.TryGetValue(playerId, out var inventory))
+        {
+            return inventory.RemoveItemFromBag(itemId, quantity);
+        }
+        return false;
     }
+    #if UNITY_EDITOR
+    /// <summary>
+    /// (Editor Debugging Only) Attempts to get the PlayerInventory instance for a player.
+    /// </summary>
+    /// <returns>True if the player's inventory was found, false otherwise.</returns>
+    public bool TryGetPlayerInventory(string playerId, out PlayerInventory playerInv)
+    {
+        return _playerInventories.TryGetValue(playerId, out playerInv);
+    }
+    #endif
 }
 
-
-
-[System.Serializable] // Make serializable if you ever want to inspect it directly on a MonoBehaviour
-public class PlayerInventory 
+/// <summary>
+/// Represents a single stack of items in the player's inventory or an equipped item.
+/// </summary>
+[Serializable] // Keep Serializable for Unity inspector and potential saving
+public class InventorySlot
 {
-    public const int MAX_SLOTS = 20;
-    
-    // Changed to hold InventorySlot objects which now contain ItemDefinition references
-    public List<InventorySlot> items = new(); 
+    // --- Core Data ---
+    /// <summary>
+    /// Reference to the immutable ScriptableObject definition for this item type.
+    /// </summary>
+    public ItemDefinition ItemDef;
 
     /// <summary>
-    /// Finds the slot containing an item with the given ID.
+    /// Cached ID from the ItemDefinition for easier and faster lookups.
     /// </summary>
-    public InventorySlot GetSlot(string itemId)
-    {
-        // Use the cached itemId in the slot for lookup
-        return items.FirstOrDefault(s => s.itemId == itemId); 
-    }
+    public string itemId;
 
     /// <summary>
-    /// Adds an item to the inventory, handling stacking.
+    /// The number of items in this stack (relevant for stackable items).
     /// </summary>
-    public bool AddItem(ItemDefinition itemDef)
+    public int quantity;
+
+    /// <summary>
+    /// Indicates whether this item is currently equipped (if equippable).
+    /// Note: For specific equipment slots, the PlayerInventory will track which slot this item occupies.
+    /// </summary>
+    public bool isEquipped; // This might become less relevant with specific slot tracking, but can be kept for simple checks.
+
+    // --- Constructor ---
+    /// <summary>
+    /// Creates a new inventory slot based on an ItemDefinition.
+    /// </summary>
+    /// <param name="itemDef">The definition for the item type this slot represents.</param>
+    public InventorySlot(ItemDefinition itemDef)
     {
         if (itemDef == null)
         {
-            Debug.LogWarning("Attempted to add null ItemDefinition to inventory.");
-            return false;
+            Debug.LogError("Cannot create InventorySlot with null ItemDefinition.");
+            // Consider throwing an exception or handling this state more explicitly
+            return;
         }
 
-        // Try to stack if possible
-        if (itemDef.isStackable && itemDef.maxStack > 1)
-        {
-            // Find an existing slot for this item type that isn't full
-            var existingSlot = items.FirstOrDefault(slot =>
-                slot.ItemDef == itemDef && // Reference comparison is fine for ScriptableObjects
-                slot.quantity < itemDef.maxStack);
-
-            if (existingSlot != null)
-            {
-                existingSlot.quantity++;
-                Debug.Log($"Stacked item {itemDef.displayName}. New quantity: {existingSlot.quantity}");
-                return true;
-            }
-        }
-
-        // Add new slot if there's space
-        if (items.Count < MAX_SLOTS)
-        {
-            items.Add(new InventorySlot(itemDef));
-            Debug.Log($"Added new item {itemDef.displayName} to inventory.");
-            return true;
-        }
-
-        Debug.Log($"Failed to add item {itemDef.displayName}. Inventory is full ({MAX_SLOTS}/{MAX_SLOTS}).");
-        return false; // Inventory full or couldn't stack
+        this.ItemDef = itemDef;
+        this.itemId = itemDef.itemId; // Cache the ID
+        // Stackables start at 1, non-stackables also represented by quantity 1 for consistency
+        this.quantity = 1;
+        this.isEquipped = false; // Starts unequipped
     }
 
-    /// <summary>
-    /// Removes a specified quantity of an item from the inventory.
-    /// </summary>
-    public bool RemoveItem(string itemId, int quantity = 1)
-    {
-        var slot = GetSlot(itemId);
-        if (slot == null)
-        {
-            Debug.Log($"Cannot remove item, slot not found for ID: {itemId}");
-            return false;
-        }
-
-        slot.quantity -= quantity;
-
-        if (slot.quantity <= 0)
-        {
-            items.Remove(slot);
-            Debug.Log($"Removed item slot for ID: {itemId} (quantity reached 0)");
-        }
-        else
-        {
-             Debug.Log($"Reduced quantity for item ID: {itemId}. New quantity: {slot.quantity}");
-        }
-        return true;
-    }
-
-    /// <summary>
-    /// Equips or unequips an item.
-    /// </summary>
-    public bool EquipItem(string itemId)
-    {
-        var slotToToggle = GetSlot(itemId);
-        if (slotToToggle == null || 
-            slotToToggle.ItemDef == null || 
-            slotToToggle.ItemDef.equipSlot == ItemDefinition.EquipmentSlot.None)
-        {
-            Debug.Log($"Cannot equip item ID: {itemId}. Slot not found, ItemDef null, or not equippable.");
-            return false;
-        }
-
-        // If it's already equipped, just unequip it
-        if (slotToToggle.isEquipped)
-        {
-            slotToToggle.isEquipped = false;
-            Debug.Log($"Unequipped item {slotToToggle.ItemDef.displayName}.");
-            return true;
-        }
-
-        // If equipping, first unequip any item in the same slot
-        ItemDefinition.EquipmentSlot targetSlot = slotToToggle.ItemDef.equipSlot;
-        var currentlyEquippedInSlot = items.FirstOrDefault(s =>
-            s.isEquipped && 
-            s.ItemDef != null && 
-            s.ItemDef.equipSlot == targetSlot);
-
-        if (currentlyEquippedInSlot != null)
-        {
-            currentlyEquippedInSlot.isEquipped = false;
-            Debug.Log($"Unequipped previous item {currentlyEquippedInSlot.ItemDef.displayName} from slot {targetSlot}.");
-        }
-
-        slotToToggle.isEquipped = true;
-        Debug.Log($"Equipped item {slotToToggle.ItemDef.displayName} in slot {targetSlot}.");
-        return true;
-    }
-
-    /// <summary>
-    /// Gets all items in the inventory.
-    /// </summary>
-    public List<InventorySlot> GetAllItems()
-    {
-        return items;
-    }
+    // --- Optional: Parameterless constructor for Unity serialization ---
+    // Unity sometimes needs this for lists/arrays to work correctly in the Inspector.
+    // If you encounter issues with lists of InventorySlot in other ScriptableObjects or MonoBehaviours, uncomment this.
+    // public InventorySlot() { }
 }

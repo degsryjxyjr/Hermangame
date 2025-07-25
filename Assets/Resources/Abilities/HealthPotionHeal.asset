@@ -10,16 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 826cabe2270b9f044ae57bd03cad4bf9, type: 3}
-  m_Name: GenericHeal
+  m_Name: HealthPotionHeal
   m_EditorClassIdentifier: 
-  abilityName: Generic Heal
+  abilityName: Health Potion Heal
   icon: {fileID: 0}
   manaCost: 0
   cooldown: 0
   supportedTargetTypes: 00000000
-  range: 0
+  range: 1
   radius: 0
-  baseEffectValue: 0
+  baseEffectValue: -50
+  effectLogicSource: {fileID: 5272473619623566952, guid: 94cd515323c6d3e45b122d8e77b346ea, type: 3}
   effectPrefab: {fileID: 0}
   animationTrigger: 
   usableOutOfCombat: 1

@@ -144,18 +144,15 @@ public class PlayerManager : MonoBehaviour
     private PlayerConnection CreateNewConnection(string sessionId, Dictionary<string, object> joinData)
     {
         Debug.Log($"Creating new player connection for {sessionId}");
-
         //use class names
         string className = joinData["class"].ToString();
         var classDef = ClassManager.Instance.GetAvailableClasses()
             .FirstOrDefault(c => c.className == className);
-
         if (classDef == null)
         {
             Debug.LogError($"Class {className} not found, using fallback");
             classDef = ClassManager.Instance.GetAvailableClasses().First();
         }
-
         return new PlayerConnection(sessionId)
         {
             LobbyData = new LobbyPlayerData
@@ -164,7 +161,7 @@ public class PlayerManager : MonoBehaviour
                 Role = className,
                 IsReady = false
             },
-            GameData = ScriptableObject.CreateInstance<PlayerGameData>(),
+            // --- REMOVED: GameData = ScriptableObject.CreateInstance<PlayerGameData>(), ---
             LastActivityTime = Time.time,
             ReconnectToken = Guid.NewGuid().ToString()
         };
@@ -432,41 +429,26 @@ public class PlayerManager : MonoBehaviour
     {
         var classDef = ClassManager.Instance.GetAvailableClasses()
             .FirstOrDefault(c => c.className == connection.LobbyData.Role);
-        
         if (classDef == null)
         {
             Debug.LogError($"Class definition not found for: {connection.LobbyData.Role}");
             classDef = ClassManager.Instance.GetAvailableClasses().First();   // fallback
         }
-
-        connection.GameData.classDefinition = classDef;
-        connection.GameData.stats.Initialize(classDef, connection.GameData.level);
-        
-        // Initialize abilities
-        connection.GameData.unlockedAbilities = new List<AbilityDefinition>(classDef.startingAbilities);
-        
+        // --- UPDATED: Assign to direct property ---
+        connection.ClassDefinition = classDef;
+        // --- UPDATED: Call the new initialization method ---
+        // Ensure Level is set if needed before calling InitializeStats.
+        // Currently, it uses the default Level = 1 from PlayerConnection.
+        connection.InitializeStats();
+        // --- UPDATED: Assign to direct property ---
+        connection.UnlockedAbilities = new List<AbilityDefinition>(classDef.startingAbilities);
         // Initialize inventory through InventoryService
         _inventory.InitializeInventory(connection.NetworkId, classDef.startingEquipment);
-        
         Debug.Log($"Initialized {connection.LobbyData.Name} as {classDef.className}");
     }
     #endregion
 
     #region Data Structures
-    public class PlayerConnection
-    {
-        public string NetworkId { get; }
-        public string ReconnectToken { get; set; }
-        public float LastActivityTime { get; set; }
-        public LobbyPlayerData LobbyData { get; set; }
-        public PlayerGameData GameData { get; set; }
-
-        public PlayerConnection(string networkId)
-        {
-            NetworkId = networkId;
-        }
-    }
-
     private struct DisconnectedSession
     {
         public PlayerConnection Session;
@@ -474,12 +456,5 @@ public class PlayerManager : MonoBehaviour
         public float DisconnectTime;
     }
 
-    [System.Serializable]
-    public class LobbyPlayerData
-    {
-        public string Name;
-        public string Role;
-        public bool IsReady;
-    }
     #endregion
 }

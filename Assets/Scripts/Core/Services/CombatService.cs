@@ -211,8 +211,7 @@ public class CombatService : MonoBehaviour
     /// </summary>
     private bool ApplyAbilityEffects(string casterPlayerId, string targetPlayerId, AbilityDefinition abilityDefinition)
     {
-        // This is the logic we started building in the previous step
-        var targetPlayer = PlayerManager.Instance.GetPlayer(targetPlayerId);
+        var targetPlayer = PlayerManager.Instance.GetPlayer(targetPlayerId) as PlayerConnection; // Explicit cast if needed
         if (targetPlayer == null)
         {
             Debug.LogWarning($"Cannot apply ability effects, target player not found: {targetPlayerId}");
@@ -220,116 +219,111 @@ public class CombatService : MonoBehaviour
         }
 
         // --- Apply Core Effect (Heal/Damage) ---
-        // --- CHANGED: Use baseEffectValue instead of baseDamage ---
-        int finalEffectValue = abilityDefinition.baseEffectValue; // Could add scaling, crits, etc. here
+        // --- CHANGED: Use baseEffectValue (assuming you updated AbilityDefinition) ---
+        int finalEffectValue = abilityDefinition.baseEffectValue;
         if (finalEffectValue < 0) // Healing
         {
             int healAmount = Mathf.Abs(finalEffectValue);
-            targetPlayer.GameData.stats.currentHealth = Mathf.Clamp(
-                targetPlayer.GameData.stats.currentHealth + healAmount,
+            int healthBefore = targetPlayer.CurrentHealth;
+            targetPlayer.CurrentHealth = Mathf.Clamp(
+                targetPlayer.CurrentHealth + healAmount,
                 0,
-                targetPlayer.GameData.stats.maxHealth
+                targetPlayer.MaxHealth
             );
-            Debug.Log($"Player {targetPlayerId} healed for {healAmount}. New HP: {targetPlayer.GameData.stats.currentHealth}/{targetPlayer.GameData.stats.maxHealth}");
-            // TODO: Send specific heal message to clients if needed for UI feedback
-             // --- Send Health Update to Target Client ---
-             GameServer.Instance.SendToPlayer(targetPlayer.NetworkId, new
-             {
-                 type = "stats_update",
-                 currentHealth = targetPlayer.GameData.stats.currentHealth,
-                 maxHealth = targetPlayer.GameData.stats.maxHealth
-                 // Add other relevant stats if changed
-             });
-             // --- Send Ability Effect Message ---
-             // Example: Send message to caster about effect (if different from target)
-             if (casterPlayerId != targetPlayerId)
-             {
-                 GameServer.Instance.SendToPlayer(casterPlayerId, new
-                 {
-                     type = "ability_effect",
-                     message = $"You used {abilityDefinition.abilityName} on {targetPlayer?.LobbyData?.Name ?? targetPlayerId}."
-                 });
-             }
-             else
-             {
-                 GameServer.Instance.SendToPlayer(casterPlayerId, new
-                 {
-                     type = "ability_effect",
-                     message = $"You used {abilityDefinition.abilityName}."
-                 });
-             }
+            int actualHeal = targetPlayer.CurrentHealth - healthBefore;
+
+            Debug.Log($"Player {targetPlayerId} healed for {actualHeal}. New HP: {targetPlayer.CurrentHealth}/{targetPlayer.MaxHealth}");
+
+            // --- Send Health Update to Target Client ---
+            GameServer.Instance.SendToPlayer(targetPlayer.NetworkId, new
+            {
+                type = "stats_update",
+                currentHealth = targetPlayer.CurrentHealth,
+                maxHealth = targetPlayer.MaxHealth
+            });
+
+            // --- Send Ability Effect Message ---
+            if (casterPlayerId != targetPlayerId)
+            {
+                GameServer.Instance.SendToPlayer(casterPlayerId, new
+                {
+                    type = "ability_effect",
+                    message = $"You used {abilityDefinition.abilityName} on {targetPlayer.LobbyData?.Name ?? targetPlayerId}."
+                });
+            }
+            else
+            {
+                GameServer.Instance.SendToPlayer(casterPlayerId, new
+                {
+                    type = "ability_effect",
+                    message = $"You used {abilityDefinition.abilityName}."
+                });
+            }
         }
-        else if (finalEffectValue > 0) // Damage (Placeholder)
+        else if (finalEffectValue > 0) // Damage
         {
             // Simple damage application. Add defense, damage types, etc. later.
-            targetPlayer.GameData.stats.currentHealth = Mathf.Clamp(
-                targetPlayer.GameData.stats.currentHealth - finalEffectValue,
+            int damageAmount = finalEffectValue; // Apply calculations based on type/defense here
+            int healthBefore = targetPlayer.CurrentHealth;
+            // Placeholder calculation - replace with your damage formula
+            int damageTaken = Mathf.Max(1, damageAmount - Mathf.FloorToInt(targetPlayer.Defense / 10f));
+            targetPlayer.CurrentHealth = Mathf.Clamp(
+                targetPlayer.CurrentHealth - damageTaken,
                 0,
-                targetPlayer.GameData.stats.maxHealth
+                targetPlayer.MaxHealth
             );
-            Debug.Log($"Player {targetPlayerId} took {finalEffectValue} damage. New HP: {targetPlayer.GameData.stats.currentHealth}/{targetPlayer.GameData.stats.maxHealth}");
-            // TODO: Send specific damage message to clients
-             // --- Send Health Update to Target Client ---
-             GameServer.Instance.SendToPlayer(targetPlayer.NetworkId, new
-             {
-                 type = "stats_update",
-                 currentHealth = targetPlayer.GameData.stats.currentHealth,
-                 maxHealth = targetPlayer.GameData.stats.maxHealth
-                 // Add other relevant stats if changed
-             });
-             // --- Send Ability Effect Message ---
-             GameServer.Instance.SendToPlayer(casterPlayerId, new
-             {
-                 type = "ability_effect",
-                 message = $"You used {abilityDefinition.abilityName} on {targetPlayer?.LobbyData?.Name ?? targetPlayerId}."
-             });
+            int actualDamage = healthBefore - targetPlayer.CurrentHealth;
+
+            Debug.Log($"Player {targetPlayerId} took {actualDamage} damage. New HP: {targetPlayer.CurrentHealth}/{targetPlayer.MaxHealth}");
+
+            // --- Send Health Update to Target Client ---
+            GameServer.Instance.SendToPlayer(targetPlayer.NetworkId, new
+            {
+                type = "stats_update",
+                currentHealth = targetPlayer.CurrentHealth,
+                maxHealth = targetPlayer.MaxHealth
+            });
+
+            // --- Send Ability Effect Message ---
+            GameServer.Instance.SendToPlayer(casterPlayerId, new
+            {
+                type = "ability_effect",
+                message = $"You used {abilityDefinition.abilityName} on {targetPlayer.LobbyData?.Name ?? targetPlayerId}."
+            });
         }
         else
         {
             Debug.Log($"Ability {abilityDefinition.abilityName} had no HP effect (effect value was 0).");
-             // --- Send Generic Effect Message ---
-             GameServer.Instance.SendToPlayer(casterPlayerId, new
-             {
-                 type = "ability_effect",
-                 message = $"You used {abilityDefinition.abilityName}."
-             });
+            // --- Send Generic Effect Message ---
+            GameServer.Instance.SendToPlayer(casterPlayerId, new
+            {
+                type = "ability_effect",
+                message = $"You used {abilityDefinition.abilityName}."
+            });
         }
 
-        // --- Instantiate Visual Effect ---
-        if (abilityDefinition.effectPrefab != null)
-        {
-            // TODO: Logic to instantiate effectPrefab at target location
-            Debug.Log($"Instantiating effect prefab for {abilityDefinition.abilityName} on target {targetPlayerId}.");
-        }
-
-        // --- Trigger Animation ---
-        if (!string.IsNullOrEmpty(abilityDefinition.animationTrigger))
-        {
-            // TODO: Logic to trigger animation on the caster's entity
-            Debug.Log($"Triggering animation '{abilityDefinition.animationTrigger}' for caster {casterPlayerId}.");
-        }
-
-        // --- Deduct Mana ---
-        var casterPlayer = PlayerManager.Instance.GetPlayer(casterPlayerId);
+        // --- Deduct Mana (using new property) ---
+        var casterPlayer = PlayerManager.Instance.GetPlayer(casterPlayerId) as PlayerConnection;
         if (casterPlayer != null && abilityDefinition.manaCost > 0)
         {
-            casterPlayer.GameData.stats.magic = Mathf.Max(0, casterPlayer.GameData.stats.magic - abilityDefinition.manaCost);
-            Debug.Log($"Deducted {abilityDefinition.manaCost} mana from {casterPlayerId}. New Mana: {casterPlayer.GameData.stats.magic}");
-            // TODO: Send mana update to caster's client
-             GameServer.Instance.SendToPlayer(casterPlayer.NetworkId, new
-             {
-                 type = "stats_update",
-                 magic = casterPlayer.GameData.stats.magic
-                 // Add other relevant stats if changed
-             });
+            int manaBefore = casterPlayer.Magic;
+            casterPlayer.Magic = Mathf.Max(0, casterPlayer.Magic - abilityDefinition.manaCost);
+            int manaSpent = manaBefore - casterPlayer.Magic;
+            Debug.Log($"Deducted {manaSpent} mana from {casterPlayerId}. New Mana: {casterPlayer.Magic}");
+
+            // --- Send mana update to caster's client ---
+            GameServer.Instance.SendToPlayer(casterPlayer.NetworkId, new
+            {
+                type = "stats_update",
+                magic = casterPlayer.Magic
+                // Add other relevant stats if changed
+            });
         }
 
         // --- Apply Cooldown (Conceptual) ---
-        // Cooldowns are usually tracked per player/ability pair.
-        // This might involve setting a timestamp or turn count.
-        // ApplyCooldown(casterPlayerId, abilityDefinition);
+        // ... (rest of logic)
 
-        return true;
+        return true; // or based on success conditions
     }
 
     // --- Integration with InventoryService ---
@@ -410,7 +404,7 @@ public class CombatService : MonoBehaviour
 
     // --- Message Handling ---
 
-    public void HandleMessage(PlayerManager.PlayerConnection player, Dictionary<string, object> msg)
+    public void HandleMessage(PlayerConnection player, Dictionary<string, object> msg)
     {
         // --- CORRECTED: Use player.NetworkId instead of player.SessionId ---
         string playerId = player.NetworkId;
@@ -498,7 +492,7 @@ public class CombatService : MonoBehaviour
         return Resources.Load<AbilityDefinition>($"Abilities/{id}");
     }
 
-    public void StartCombat(List<PlayerManager.PlayerConnection> players)
+    public void StartCombat(List<PlayerConnection> players)
     {
         _isInCombat = true;
         // Initialize encounter state, determine turn order, set _currentTurnPlayerId
@@ -516,7 +510,7 @@ public class CombatService : MonoBehaviour
     }
 
     // --- CORRECTED: Use player.NetworkId ---
-    public void OnPlayerDisconnected(PlayerManager.PlayerConnection player)
+    public void OnPlayerDisconnected(PlayerConnection player)
     {
         // Handle combat disconnection
         // E.g., if it's their turn, skip it or handle defeat.
@@ -525,7 +519,7 @@ public class CombatService : MonoBehaviour
     }
 
     // --- CORRECTED: Use player.NetworkId ---
-    public void OnPlayerReconnected(PlayerManager.PlayerConnection player)
+    public void OnPlayerReconnected(PlayerConnection player)
     {
         // Handle combat reconnection
         // E.g., send them the current combat state.
