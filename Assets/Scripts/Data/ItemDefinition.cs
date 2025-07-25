@@ -49,11 +49,11 @@ public class ItemDefinition : ScriptableObject
     {
         if (itemType == ItemType.Equipment && equipSlot == EquipmentSlot.None)
         {
-            Debug.LogError($"ItemDefinition '{name}' is marked as Equipment but has 'None' for EquipSlot. This might be an error.", this);
+            Debug.LogWarning($"ItemDefinition '{name}' is marked as Equipment but has 'None' for EquipSlot. This might be an error.", this);
         }
         if (itemType != ItemType.Equipment && equipSlot != EquipmentSlot.None)
         {
-            Debug.LogError($"ItemDefinition '{name}' is not Equipment but has EquipSlot '{equipSlot}'. This might be an error.", this);
+            Debug.LogWarning($"ItemDefinition '{name}' is not Equipment but has EquipSlot '{equipSlot}'. This might be an error.", this);
         }
     }
 }

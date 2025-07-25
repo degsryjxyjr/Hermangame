@@ -162,3 +162,78 @@ button {
         grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
     }
 }
+
+/* --- Equipped Items Section --- */
+#equippedSection {
+    margin-bottom: 20px; /* Space below the equipped section */
+}
+
+#equippedSection h4, #bagSection h4 {
+    color: gold; /* Match the theme */
+    margin-bottom: 10px;
+}
+
+.equipped-grid {
+    display: grid;
+    /* Adjust columns based on your defined slots. Example for 3 slots: */
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); 
+    gap: 15px;
+    padding: 10px 0;
+}
+
+/* Style for an equipped item slot (either empty or filled) */
+.equipped-slot {
+    background: rgba(100, 100, 100, 0.3); /* Subtle background for empty slots */
+    border: 2px dashed rgba(255, 215, 0, 0.3); /* Dashed border for empty */
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+    color: #aaa;
+    min-height: 100px; /* Give empty slots a size */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: background-color 0.2s, border 0.2s;
+}
+
+.equipped-slot.filled {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 215, 0, 0.5); /* Solid border for filled */
+    color: white;
+}
+
+/* Style for the item inside an equipped slot */
+.equipped-slot .equipped-item {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.equipped-slot .item-icon {
+    width: 60px; /* Match bag item icon size */
+    height: 60px;
+    object-fit: contain;
+    margin-bottom: 8px;
+}
+
+.equipped-slot .item-name {
+    font-size: 14px;
+    word-break: break-word;
+    display: block;
+}
+
+.equipped-slot .slot-name {
+    font-size: 12px;
+    opacity: 0.7; /* Make slot name less prominent */
+    position: absolute;
+    bottom: 5px;
+    left: 0;
+    right: 0;
+}
+
+/* --- End Equipped Items Section --- */

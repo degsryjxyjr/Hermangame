@@ -177,7 +177,6 @@ public class InventoryService : MonoBehaviour
                 if (itemUsed)
                 {
                     // The EquipItem method handles the internal state change (isEquipped flag, movement between lists/dict)
-                    Debug.Log($"{(bagSlot.isEquipped ? "Unequipped" : "Equipped")} item {bagSlot.ItemDef.displayName}.");
                     // TODO: Potentially apply/remove stat bonuses from equipment here
                     // This would involve reading the item's modifiers and adjusting player stats
                     // ApplyEquipmentBonuses(player, bagSlot.ItemDef, bagSlot.isEquipped); // isEquipped is now toggled

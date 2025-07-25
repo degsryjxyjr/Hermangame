@@ -26,6 +26,8 @@ MonoBehaviour:
   startingEquipment:
   - {fileID: 11400000, guid: c3cffd64c3ec3ed468e60ac1e728ae4c, type: 2}
   - {fileID: 11400000, guid: fd2c4ce97e15b844e9c12540a71dda30, type: 2}
+  - {fileID: 11400000, guid: 20d3eb609a4f1dd428326e8d80f343dc, type: 2}
+  - {fileID: 11400000, guid: 89a2956f9484fef4e96f861cfc34bc2c, type: 2}
   healthGrowth:
     serializedVersion: 2
     m_Curve:
@@ -71,6 +73,18 @@ MonoBehaviour:
       weightedMode: 0
       inWeight: 0
       outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  defenseGrowth:
+    serializedVersion: 2
+    m_Curve: []
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  magicGrowth:
+    serializedVersion: 2
+    m_Curve: []
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4

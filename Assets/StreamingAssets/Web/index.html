@@ -43,8 +43,24 @@
                 <h3>Inventory</h3>
                 <button id="closeInventory">×</button>
             </div>
-            <div id="inventoryItems" class="inventory-grid">
-                <!-- Items will be populated here -->
+            <div id="equippedSection">
+                <h4>Equipped</h4>
+                <div id="equippedItems" class="equipped-grid">
+                    <!-- Equipped items will be populated here -->
+                    <!-- Example slot placeholders (optional) -->
+                    <!--
+                    <div class="equipped-slot" data-slot="Weapon"><span class="slot-name">Weapon</span></div>
+                    <div class="equipped-slot" data-slot="Armor"><span class="slot-name">Armor</span></div>
+                    <div class="equipped-slot" data-slot="Accessory"><span class="slot-name">Accessory</span></div>
+                    -->
+                </div>
+            </div>
+            <hr> <!-- Separator -->
+            <div id="bagSection">
+                <h4>Bag</h4>
+                <div id="inventoryItems" class="inventory-grid">
+                    <!-- Bag items will be populated here -->
+                </div>
             </div>
         </div>
     </div>
@@ -63,13 +79,13 @@
         const inventoryItems   = document.getElementById('inventoryItems');
         let inventoryData      = [];
 
-        // More reliable inventory toggle
+        // --- Ensure your existing toggleInventory function requests the full update ---
         function toggleInventory() {
             const panel = document.getElementById('inventoryPanel');
-            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-            
-            if (panel.style.display === 'block') {
-                sendMessage({ type: "inventory", action: "get" });
+            const isVisible = panel.style.display === 'block';
+            panel.style.display = isVisible ? 'none' : 'block';
+            if (!isVisible) { // If we are opening the panel
+                sendMessage({ type: "inventory", action: "get" }); // Request full inventory data
             }
         }
 
@@ -91,78 +107,130 @@
             }
         });
 
-        function handleInventoryData(items) {
-            const container = document.getElementById('inventoryItems');
-            container.innerHTML = '';
-            if (!items || items.length === 0) {
-                container.innerHTML = '<div class="empty-inventory">Your inventory is empty</div>';
-                return;
+        function handleInventoryData(inventoryUpdateData) {
+            // --- Handle Bag Items (existing logic, slightly modified) ---
+            const bagItems = inventoryUpdateData.items || []; // Ensure it's an array
+            const bagContainer = document.getElementById('inventoryItems');
+            bagContainer.innerHTML = ''; // Clear existing items
+
+            if (bagItems.length === 0) {
+                bagContainer.innerHTML = '<div class="empty-inventory">Your bag is empty</div>';
+            } else {
+                bagItems.forEach(item => {
+                    const itemEl = createInventoryItemElement(item); // Reuse item creation logic
+                    // Add click listener for using items from the bag
+                    itemEl.addEventListener('click', () => {
+                        sendMessage({ type: "inventory", action: "use", itemId: item.id });
+                    });
+                    bagContainer.appendChild(itemEl);
+                });
             }
 
-            items.forEach(item => {
-                const itemEl = document.createElement('div');
-                itemEl.className = 'inventory-item';
+            // --- Handle Equipped Items (NEW LOGIC) ---
+            const equippedData = inventoryUpdateData.equipped || {}; // Ensure it's an object
+            const equippedContainer = document.getElementById('equippedItems');
+            equippedContainer.innerHTML = ''; // Clear existing slots/items
 
-                // --- Create the image element ---
-                const imgEl = document.createElement('img');
-                imgEl.alt = item.name;
-                imgEl.className = 'item-icon'; // Optional: Add a class for styling
+            // Define your expected equipment slots (order matters for display)
+            // Make sure these match the enum names used in C# (ItemDefinition.EquipmentSlot)
+            const equipmentSlotOrder = ['MainHand', 'OffHand', 'Head', 'Body', 'Accessory'];
 
-                // --- Implement PNG/JPG fallback logic ---
-                // The C# code now sends a base path like "images/icons/itemId" or the default path
-                let basePath = item.icon || 'images/icons/default-item.jpg';
+            equipmentSlotOrder.forEach(slotName => {
+                const itemData = equippedData[slotName]; // Get item data for this slot, if any
 
-                // Check if it's the default item; if so, load it directly without fallback
-                if (basePath === 'images/icons/default-item.jpg') {
-                    imgEl.src = basePath;
+                // Create a container for the slot
+                const slotEl = document.createElement('div');
+                slotEl.className = 'equipped-slot'; // Base class for styling
+                slotEl.dataset.slot = slotName; // Store slot name for potential future use
+
+                if (itemData) {
+                    // Slot is filled
+                    slotEl.classList.add('filled');
+
+                    // Create the equipped item element (similar to bag item)
+                    const equippedItemEl = createInventoryItemElement(itemData);
+
+                    // Optional: Add specific class or behavior for equipped items
+                    equippedItemEl.classList.add('equipped-item');
+
+                    // Add click listener to potentially unequip or show details
+                    // Here, we'll use the "equip" action, which should toggle it off
+                    // according to your C# logic (PlayerInventory.EquipItem)
+                    equippedItemEl.addEventListener('click', () => {
+                        sendMessage({ type: "inventory", action: "equip", itemId: itemData.id });
+                        // Or send "use" if that's the intended way to toggle equipment
+                        // sendMessage({ type: "inventory", action: "use", itemId: itemData.id });
+                    });
+
+                    // Clear default content and add the item
+                    slotEl.innerHTML = '';
+                    slotEl.appendChild(equippedItemEl);
+
                 } else {
-                    // It's a specific item base path, assume no extension was sent
-                    // Try PNG first
-                    imgEl.src = `${basePath}.png`;
-
-                    // Set up the onerror handler to try JPG if PNG fails
-                    imgEl.onerror = function() {
-                        console.warn(`Failed to load PNG icon: ${this.src}. Trying JPG...`);
-                        // Change the source to the .jpg version
-                        this.src = `${basePath}.jpg`;
-                        // If JPG also fails, onerror will fire again.
-                        // We could set another onerror to load the final default,
-                        // or rely on the existing onerror in the original HTML which loads default-item.jpg
-                        // Let's add one more fallback to be sure:
-                        this.onerror = function() {
-                            console.warn(`Failed to load JPG icon: ${this.src}. Loading default.`);
-                            this.src = 'images/icons/default-item.jpg';
-                        };
-                    };
+                    // Slot is empty
+                    // Display the slot name or an empty indicator
+                    const slotNameEl = document.createElement('span');
+                    slotNameEl.className = 'slot-name';
+                    slotNameEl.textContent = slotName;
+                    slotEl.appendChild(slotNameEl);
+                    // You might add a visual "empty slot" icon here too if desired
                 }
 
-                // --- Create other elements ---
-                const nameEl = document.createElement('span');
-                nameEl.className = 'item-name';
-                nameEl.textContent = item.name;
-
-                const quantityEl = document.createElement('span');
-                if (item.quantity > 1) {
-                    quantityEl.className = 'item-quantity';
-                    quantityEl.textContent = item.quantity;
-                }
-
-                // --- Assemble the item element ---
-                itemEl.appendChild(imgEl);
-                itemEl.appendChild(nameEl);
-                if (item.quantity > 1) {
-                    itemEl.appendChild(quantityEl);
-                }
-
-                // --- Add click listener ---
-                itemEl.addEventListener('click', () => {
-                    sendMessage({ type: "inventory", action: "use", itemId: item.id });
-                });
-
-                container.appendChild(itemEl);
+                equippedContainer.appendChild(slotEl);
             });
-        }
 
+            // --- Show the inventory panel if it's not already visible ---
+            // (This part was already handled by toggleInventory calling this function)
+        }
+        // --- Helper function to create an inventory item element ---
+        // This avoids duplicating the creation logic for bag and equipped items
+        function createInventoryItemElement(item) {
+            const itemEl = document.createElement('div');
+            itemEl.className = 'inventory-item'; // Or 'equipped-item' if you want different base styles
+
+            // --- Create the image element ---
+            const imgEl = document.createElement('img');
+            imgEl.alt = item.name || 'Item';
+            imgEl.className = 'item-icon';
+
+            // --- Implement PNG/JPG fallback logic ---
+            let basePath = item.icon || 'images/icons/default-item.jpg';
+            if (basePath === 'images/icons/default-item.jpg') {
+                imgEl.src = basePath;
+            } else {
+                imgEl.src = `${basePath}.png`;
+                imgEl.onerror = function () {
+                    console.warn(`Failed to load PNG icon: ${this.src}. Trying JPG...`);
+                    this.src = `${basePath}.jpg`;
+                    this.onerror = function () {
+                        console.warn(`Failed to load JPG icon: ${this.src}. Loading default.`);
+                        this.src = 'images/icons/default-item.jpg';
+                    };
+                };
+            }
+
+            // --- Create name element ---
+            const nameEl = document.createElement('span');
+            nameEl.className = 'item-name';
+            nameEl.textContent = item.name || 'Unknown Item';
+
+            // --- Create quantity element (if applicable and > 1) ---
+            let quantityEl = null;
+            if (item.quantity && item.quantity > 1) {
+                quantityEl = document.createElement('span');
+                quantityEl.className = 'item-quantity';
+                quantityEl.textContent = item.quantity;
+            }
+
+            // --- Assemble the item element ---
+            itemEl.appendChild(imgEl);
+            itemEl.appendChild(nameEl);
+            if (quantityEl) {
+                itemEl.appendChild(quantityEl);
+            }
+
+            return itemEl;
+        }
         /* ---- INVENTORY UI END---- */
 
         function logDebug(message) {
@@ -263,16 +331,10 @@
                         // add other states if you need them
                     }
                     break;
-                case "game_starting":
-                    logDebug("Game is starting!");
-                    alert("Game is starting!");
-                    // show the game view
-                    document.getElementById('lobbyView').style.display = 'none';
-                    document.getElementById('gameView').style.display = 'block';
-                    break;
 
                 case "inventory_update":
-                    handleInventoryData(msg.items);
+                    // Pass the entire message object, not just msg.items
+                    handleInventoryData(msg);
                     break;
 
                 default:
