@@ -5,6 +5,8 @@ using System; // Add if not already present
 [CreateAssetMenu(menuName = "Game/Item")]
 public class ItemDefinition : ScriptableObject
 {
+
+    [Header("Basic")]
     public string itemId; // Consider making this [SerializeField] private set; and providing a getter if you want to prevent accidental changes after creation
     public string displayName;
     public Sprite icon;
@@ -18,7 +20,10 @@ public class ItemDefinition : ScriptableObject
 
     [Header("Direct Effects (simple)")]
     // Apply simple stat changes directly
+    [Header("Health mod directly adds/decreases health!")]
     public int healthModifier;
+
+    [Header("These are true modifiers")]
     public int attackModifier;
     public int defenseModifier;
     public int magicModifier;
@@ -40,6 +45,24 @@ public class ItemDefinition : ScriptableObject
         Accessory   // Rings, Amulets, Belts etc. (Consider if multiples are allowed)
         // Add more specific slots if needed (Feet, Hands, etc.)
     }
+
+    [Header("Equipment Effect (Passive) (Can handle complex effects)")]
+    [Tooltip("Drag a GameObject with an IEquipmentEffect script attached here. Defines passive bonuses.")]
+    public GameObject equipmentEffectSource; // Reference to a GameObject holding the effect script
+
+    /// <summary>
+    /// Gets the IEquipmentEffect script associated with this item.
+    /// </summary>
+    /// <returns>The IEquipmentEffect instance, or null if not found.</returns>
+    public IEquipmentEffect GetEquipmentEffect()
+    {
+        if (equipmentEffectSource != null)
+        {
+            return equipmentEffectSource.GetComponent<IEquipmentEffect>();
+        }
+        return null;
+    }
+
     
     [Header("Visuals")]
     public GameObject modelPrefab;

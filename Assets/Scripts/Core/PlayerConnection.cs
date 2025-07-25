@@ -78,6 +78,9 @@ public class PlayerConnection : IEntity, IDamageable, IHealable
 
         Debug.Log($"Initialized stats for {LobbyData?.Name ?? "Unknown Player"} (Level {Level} {ClassDefinition.className}): " +
                   $"HP {CurrentHealth}/{MaxHealth}, ATK {Attack}, DEF {Defense}, MAG {Magic}");
+
+        // sending player name, class, level and xp etc
+        SendStatsUpdateToClient();
     }
 
 
@@ -187,6 +190,125 @@ public class PlayerConnection : IEntity, IDamageable, IHealable
         return actualHeal;
     }
     // --- End Implementation of IHealable ---
+    
+    // --- Implementation of IEquipmentEffect ---
+    
+    /// <summary>
+    /// Applies the effects of an equipped item to the player.
+    /// This method determines the type of effect and applies it.
+    /// </summary>
+    /// <param name="equippedItem">The ItemDefinition of the item being equipped.</param>
+    public void OnEquipItem(ItemDefinition equippedItem)
+    {
+        if (equippedItem == null)
+        {
+            Debug.LogWarning("Attempted to equip a null item.");
+            return;
+        }
+
+        // 1. Try to get a specific IEquipmentEffect script
+        IEquipmentEffect customEffect = equippedItem.GetEquipmentEffect();
+        if (customEffect != null)
+        {
+            // 2a. If found, delegate the application to the custom effect script
+            customEffect.ApplyEffect(this, equippedItem);
+            Debug.Log($"Applied custom equipment effect '{customEffect.GetType().Name}' from {equippedItem.displayName}.");
+        }
+        else
+        {
+            // 2b. If no custom effect, apply basic stat bonuses directly (fallback)
+            // This replicates the logic that was previously in InventoryService or could be its own simple effect script.
+            ApplyBasicStatBonuses(equippedItem);
+            Debug.Log($"Applied basic stat bonuses from {equippedItem.displayName} (no custom effect script).");
+        }
+
+        // Note: The specific effect script (BasicStatBonusEffect or custom ones) is responsible
+        // for calling SendStatsUpdateToClient() if needed.
+        // If applying multiple types of effects, you might call it once at the end here instead.
+        // For now, let's assume the effect script handles it.
+        // SendStatsUpdateToClient(); 
+    }
+
+        /// <summary>
+        /// Removes the effects of an unequipped item from the player.
+        /// </summary>
+        /// <param name="unequippedItem">The ItemDefinition of the item being unequipped.</param>
+        public void OnUnequipItem(ItemDefinition unequippedItem)
+        {
+            if (unequippedItem == null)
+            {
+                Debug.LogWarning("Attempted to unequip a null item.");
+                return;
+            }
+
+            // 1. Try to get the specific IEquipmentEffect script
+            IEquipmentEffect customEffect = unequippedItem.GetEquipmentEffect();
+            if (customEffect != null)
+            {
+                // 2a. If found, delegate the removal to the custom effect script
+                // **** THIS IS THE CRITICAL CALL ****
+                customEffect.RemoveEffect(this, unequippedItem);
+                Debug.Log($"Removed custom equipment effect '{customEffect.GetType().Name}' from {unequippedItem.displayName}.");
+            }
+            else
+            {
+                // 2b. If no custom effect, remove basic stat bonuses directly (fallback)
+                RemoveBasicStatBonuses(unequippedItem);
+                Debug.Log($"Removed basic stat bonuses from {unequippedItem.displayName} (no custom effect script).");
+            }
+            // Note: The specific effect script handles client updates.
+            SendStatsUpdateToClient(); 
+        }
+
+        // --- Helper methods for direct stat modification (used as fallback) ---
+        // These can also be the logic inside a default/standard IEquipmentEffect script like BasicStatBonusEffect.
+
+        private void ApplyBasicStatBonuses(ItemDefinition item)
+        {
+            this.Attack += item.attackModifier;
+            this.Defense += item.defenseModifier;
+            this.Magic += item.magicModifier;
+            // this.MaxHealth += item.healthModifier; // Add if used
+            Debug.Log($"Applied basic bonuses: +{item.attackModifier} ATK, +{item.defenseModifier} DEF, +{item.magicModifier} MAG");
+            SendStatsUpdateToClient();
+        }
+
+        private void RemoveBasicStatBonuses(ItemDefinition item)
+        {
+            this.Attack -= item.attackModifier;
+            this.Defense -= item.defenseModifier;
+            this.Magic -= item.magicModifier;
+            // this.MaxHealth -= item.healthModifier; // Subtract if used
+            this.Attack = Mathf.Max(0, this.Attack);
+            this.Defense = Mathf.Max(0, this.Defense);
+            this.Magic = Mathf.Max(0, this.Magic);
+            // this.MaxHealth = Mathf.Max(1, this.MaxHealth); // Ensure minimum
+            // this.CurrentHealth = Mathf.Min(this.CurrentHealth, this.MaxHealth);
+            Debug.Log($"Removed basic bonuses: -{item.attackModifier} ATK, -{item.defenseModifier} DEF, -{item.magicModifier} MAG");
+            SendStatsUpdateToClient();
+        }
+
+        /// <summary>
+        /// Sends the player's current stats to their client.
+        /// </summary>
+        public void SendStatsUpdateToClient()
+        {
+            GameServer.Instance.SendToPlayer(this.NetworkId, new
+            {
+                type = "stats_update",
+                role = this.ClassDefinition.className, //role cause class is used by C
+                level = this.Level,
+                experience = this.Experience,
+                currentHealth = this.CurrentHealth,
+                maxHealth = this.MaxHealth,
+                attack = this.Attack,
+                defense = this.Defense,
+                magic = this.Magic
+                // Add other stats as needed
+            });
+        }
+    // --- End Implementation of IEquipmentEffect ---
+
 }
 
 // --- Moved Data Classes ---
@@ -206,5 +328,3 @@ public enum DamageType
     // ... others
 }
 
-// PlayerGameData ScriptableObject is removed as its functionality is now in PlayerConnection
-// PlayerGameData.RuntimeStats class is removed as stats are now direct fields

@@ -237,3 +237,50 @@ button {
 }
 
 /* --- End Equipped Items Section --- */
+
+/* Player Stats Display */
+.stats-display {
+    position: absolute; /* Or relative, depending on layout needs */
+    top: 10px;
+    left: 10px;
+    background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent background */
+    color: white;
+    /* --- Increased Size --- */
+    padding: 15px;       /* Increased padding */
+    border-radius: 8px;  /* Slightly larger border radius */
+    min-width: 180px;    /* Set a minimum width to make it feel bigger */
+    /* --- End Increased Size --- */
+    font-family: Arial, sans-serif; /* Match your game's font */
+    z-index: 10; /* Ensure it's above game background but below potential UI like inventory */
+    /* Initially hidden, shown when game starts and inventory is closed */
+    display: none;
+    /* Optional: Add a subtle border */
+    border: 1px solid #444;
+    /* Optional: Add a slight shadow for depth */
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.5);
+}
+
+.stats-display h3 {
+    margin: 0 0 8px 0; /* Slightly more space below the name */
+    font-size: 1.3em;  /* Slightly larger font for the name */
+    text-align: center; /* Center the player name */
+    color: #FFD700;    /* Optional: Gold color for the name */
+}
+
+.stats-display p {
+    margin: 4px 0;     /* Slightly more vertical spacing between lines */
+    font-size: 1em;    /* Base font size for stats */
+}
+
+/* Optional: Style for low health indicator */
+.stats-display.low-health {
+    border-color: #ff4444; /* Red border when low */
+    /* You can add other effects like pulsing animation if desired */
+    /* animation: pulse 1s infinite; */
+}
+
+/* @keyframes pulse {
+    0% { border-color: #ff4444; }
+    50% { border-color: #ff8888; }
+    100% { border-color: #ff4444; }
+} */

@@ -132,103 +132,143 @@ public class PlayerInventory
     }
 
     /// <summary>
-    /// Attempts to toggle the equipped state of an item.
-    /// If the item is in the bag, it equips it (potentially unequipping the item in its slot).
-    /// If the item is equipped, it unequips it (moving it back to the bag).
+    /// Attempts to equip or unequip an item by its ID.
+    /// Handles moving the item between the bag and equipped slots.
     /// </summary>
-    /// <returns>True if the item state was successfully toggled, false otherwise.</returns>
+    /// <param name="itemId">The ID of the item to toggle.</param>
+    /// <returns>True if the action was successfully initiated, false otherwise.</returns>
     public bool EquipItem(string itemId)
     {
-        // 1. First, try to find the item in the bag
-        var targetSlot = GetBagSlot(itemId);
-
-        // 2. If not in the bag, check if it's already equipped
-        if (targetSlot == null)
+        if (string.IsNullOrEmpty(itemId))
         {
-            // Search equipped items for the ID
-            // Use .Values.FirstOrDefault to find the slot instance by its itemId property
-            targetSlot = EquippedItems.Values.FirstOrDefault(slot => slot != null && slot.itemId == itemId);
-        }
-
-        // 3. Validate the slot and item definition
-        if (targetSlot == null || targetSlot.ItemDef == null || targetSlot.ItemDef.equipSlot == ItemDefinition.EquipmentSlot.None)
-        {
-            Debug.Log($"Cannot toggle equip state for item ID: {itemId}. Item not found in bag or equipped slots, ItemDef null, or not equippable.");
+            Debug.LogWarning("Cannot toggle equipment, itemId is null or empty.");
             return false;
         }
 
-        ItemDefinition.EquipmentSlot targetSlotType = targetSlot.ItemDef.equipSlot;
+        // --- 1. FIND the InventorySlot instance associated with the itemId ---
+        InventorySlot itemSlotToToggle = null;
+        ItemDefinition.EquipmentSlot targetSlotType = ItemDefinition.EquipmentSlot.None;
 
-        // 4. Determine action based on current state
-        if (targetSlot.isEquipped)
+        // a. Search in the Bag
+        itemSlotToToggle = this.BagItems.FirstOrDefault(slot => slot != null && slot.itemId == itemId);
+        if (itemSlotToToggle != null)
         {
-            // --- Unequip Logic ---
-            targetSlot.isEquipped = false;
-            EquippedItems[targetSlotType] = null; // Clear the equipped slot
-
-            // Add the item definition back to the bag
-            // AddItemToBag handles creating a new stack or merging with an existing one
-            bool addedToBag = AddItemToBag(targetSlot.ItemDef);
-            if (!addedToBag)
+            Debug.Log($"Found item '{itemId}' in BagItems.");
+            targetSlotType = itemSlotToToggle.ItemDef?.equipSlot ?? ItemDefinition.EquipmentSlot.None;
+        }
+        else
+        {
+            // b. If not in bag, search in Equipped Items
+            // We need to iterate the dictionary to find by itemId
+            foreach (var kvp in this.EquippedItems)
             {
-                // Revert changes if bag is full
-                targetSlot.isEquipped = true;
-                EquippedItems[targetSlotType] = targetSlot; // Restore equipped state
-                Debug.LogWarning($"Failed to move unequipped item {targetSlot.ItemDef.displayName} back to bag. Bag might be full.");
-                return false;
+                if (kvp.Value != null && kvp.Value.itemId == itemId)
+                {
+                    itemSlotToToggle = kvp.Value;
+                    targetSlotType = kvp.Key; // The dictionary key IS the equipment slot type
+                    Debug.Log($"Found item '{itemId}' in EquippedItems under slot '{targetSlotType}'.");
+                    break; // Found it, stop searching
+                }
             }
-            // If AddItemToBag merged with an existing bag slot, the old equipped `targetSlot` instance becomes orphaned.
-            // This is generally fine as the item is now correctly represented in the bag.
-            // If you need the exact same instance back in the bag, the logic becomes more complex.
+        }
 
-            Debug.Log($"Unequipped item {targetSlot.ItemDef.displayName} from {targetSlotType}.");
+        // --- 2. VALIDATE the found item ---
+        if (itemSlotToToggle == null)
+        {
+            Debug.LogWarning($"Cannot toggle equipment for item ID: '{itemId}'. Item not found in Bag or Equipped slots.");
+            return false;
+        }
+        if (itemSlotToToggle.ItemDef == null)
+        {
+            Debug.LogError($"Found InventorySlot for item ID '{itemId}', but ItemDef is null!");
+            return false;
+        }
+        if (targetSlotType == ItemDefinition.EquipmentSlot.None)
+        {
+            Debug.LogWarning($"Cannot toggle equipment for item ID: '{itemId}'. ItemDef marked as equipment but EquipSlot is None.");
+            return false;
+        }
+
+        // --- 3. PERFORM the Equip/Unequip Action ---
+        if (!itemSlotToToggle.isEquipped)
+        {
+            // --- ACTION: EQUIP the item ---
+            Debug.Log($"Attempting to EQUIP item '{itemSlotToToggle.ItemDef.displayName}' (ID: {itemId}) to slot '{targetSlotType}'.");
+
+            // a. Check for and handle an item already occupying the target slot
+            if (this.EquippedItems.TryGetValue(targetSlotType, out InventorySlot previouslyEquippedSlot) && previouslyEquippedSlot != null)
+            {
+                Debug.Log($"Slot '{targetSlotType}' is occupied by '{previouslyEquippedSlot.ItemDef?.displayName ?? "Unknown Item"}'. Moving it to bag.");
+                // i. Mark the old item as unequipped
+                previouslyEquippedSlot.isEquipped = false;
+                // ii. Clear the equipped slot
+                this.EquippedItems[targetSlotType] = null;
+                // iii. Ensure the old item is back in the bag list (defensive)
+                if (!this.BagItems.Contains(previouslyEquippedSlot))
+                {
+                    this.BagItems.Add(previouslyEquippedSlot);
+                    Debug.Log($"Moved previously equipped item '{previouslyEquippedSlot.itemId}' back to BagItems list.");
+                }
+                else
+                {
+                    Debug.Log($"Previously equipped item '{previouslyEquippedSlot.itemId}' was already in BagItems list.");
+                }
+            }
+
+            // b. Equip the new item
+            // i. Update its state flag
+            itemSlotToToggle.isEquipped = true;
+            // ii. Update the EquippedItems dictionary to point to this item
+            this.EquippedItems[targetSlotType] = itemSlotToToggle;
+            Debug.Log($"EquippedItems dict for slot '{targetSlotType}' now points to item '{itemId}'.");
+            // iii. Remove the newly equipped item from the Bag list
+            if (this.BagItems.Remove(itemSlotToToggle))
+            {
+                Debug.Log($"Removed item '{itemId}' from BagItems list.");
+            }
+            else
+            {
+                Debug.LogWarning($"Item '{itemId}' was not found in BagItems list during equip removal (might already be removed).");
+            }
+
+            Debug.Log($"Successfully EQUIPPED item '{itemSlotToToggle.ItemDef.displayName}' (ID: {itemId}).");
             return true;
         }
         else
         {
-            // --- Equip Logic ---
-            // Find any item currently equipped in the target slot
-            InventorySlot currentlyEquippedInTargetSlot = GetEquippedItem(targetSlotType);
+            // --- ACTION: UNEQUIP the item ---
+            Debug.Log($"Attempting to UNEQUIP item '{itemSlotToToggle.ItemDef.displayName}' (ID: {itemId}) from slot '{targetSlotType}'.");
 
-            // If there's an item equipped, move it back to the bag
-            if (currentlyEquippedInTargetSlot != null && currentlyEquippedInTargetSlot.isEquipped)
+            // a. Validate it's actually in the expected equipped slot
+            // This check helps catch inconsistencies
+            if (!this.EquippedItems.TryGetValue(targetSlotType, out InventorySlot equippedSlotInDict) || equippedSlotInDict != itemSlotToToggle)
             {
-                // Mark it unequipped
-                currentlyEquippedInTargetSlot.isEquipped = false;
-                // Add its definition back to the bag
-                bool addedToBag = AddItemToBag(currentlyEquippedInTargetSlot.ItemDef);
-                if (addedToBag)
-                {
-                    // Clear the equipped slot reference
-                    EquippedItems[targetSlotType] = null;
-                }
-                else
-                {
-                    // Revert changes if bag is full
-                    currentlyEquippedInTargetSlot.isEquipped = true; // Restore its equipped state
-                    Debug.LogWarning($"Failed to move previously equipped item {currentlyEquippedInTargetSlot.ItemDef.displayName} back to bag when equipping {targetSlot.ItemDef.displayName}. Bag might be full.");
-                    return false; // Abort equipping
-                }
+                Debug.LogError($"Inconsistency: Item '{itemId}' is marked equipped, but EquippedItems dict for slot '{targetSlotType}' " +
+                            $"does not point to this item instance. Dict points to '{equippedSlotInDict?.itemId ?? "null"}'. Attempting to resolve...");
+                // Force fix the dictionary
+                this.EquippedItems[targetSlotType] = itemSlotToToggle;
+                // This might indicate a deeper problem, but let's continue with the unequip logic on the itemSlotToToggle instance.
             }
 
-            // Now, equip the target item
-            // Remove the item's slot from the bag (since we confirmed it's not equipped)
-            if (BagItems.Remove(targetSlot))
+            // b. Unequip the item
+            // i. Update its state flag
+            itemSlotToToggle.isEquipped = false;
+            // ii. Clear the corresponding slot in the EquippedItems dictionary
+            this.EquippedItems[targetSlotType] = null;
+            Debug.Log($"Cleared EquippedItems dict for slot '{targetSlotType}'.");
+            // iii. Add the newly unequipped item back to the Bag list (defensive)
+            if (!this.BagItems.Contains(itemSlotToToggle))
             {
-                // Mark the slot as equipped
-                targetSlot.isEquipped = true;
-                // Place the slot instance into the equipped dictionary
-                EquippedItems[targetSlotType] = targetSlot;
-                Debug.Log($"Equipped item {targetSlot.ItemDef.displayName} to {targetSlotType}.");
-                return true;
+                this.BagItems.Add(itemSlotToToggle);
+                Debug.Log($"Added item '{itemId}' back to BagItems list.");
             }
             else
             {
-                // This shouldn't happen if GetBagSlot found it and it wasn't equipped
-                Debug.LogError($"Failed to remove item slot {itemId} from BagItems during equip.");
-                // Potentially re-set isEquipped = false here if it was somehow set true elsewhere
-                return false;
+                Debug.Log($"Item '{itemId}' was already present in BagItems list.");
             }
+
+            Debug.Log($"Successfully UNEQUIPPED item '{itemSlotToToggle.ItemDef.displayName}' (ID: {itemId}).");
+            return true;
         }
     }
 

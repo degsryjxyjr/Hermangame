@@ -19,9 +19,10 @@ MonoBehaviour:
   isStackable: 0
   maxStack: 1
   healthModifier: 0
-  attackModifier: 5
+  attackModifier: 10
   defenseModifier: 0
   magicModifier: 0
   linkedAbility: {fileID: 0}
   equipSlot: 1
+  equipmentEffectSource: {fileID: 0}
   modelPrefab: {fileID: 7235997375035445226, guid: 00b1f92888d602d48b48bdfe85abdc7b, type: 3}

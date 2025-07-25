@@ -36,6 +36,18 @@
         <button id="inventoryButton" class="fab">
             <img src="images/icons/backpack.jpg" alt="Inventory">
         </button>
+
+        <!-- Player Stats Display -->
+        <div id="playerStatsDisplay" class="stats-display">
+            <h3 id="statsPlayerName">Player Name</h3>
+            <p><strong>Class:</strong> <span id="statsPlayerClass">-</span></p>
+            <p><strong>Level:</strong> <span id="statsPlayerLevel">-</span></p>
+            <p><strong>XP:</strong> <span id="statsPlayerExperience">0</span></p>
+            <p><strong>HP:</strong> <span id="statsCurrentHealth">0</span>/<span id="statsMaxHealth">0</span></p>
+            <p><strong>ATK:</strong> <span id="statsAttack">0</span></p>
+            <p><strong>DEF:</strong> <span id="statsDefense">0</span></p>
+            <p><strong>MAG:</strong> <span id="statsMagic">0</span></p>
+        </div>
         
         <!-- Inventory Panel -->
         <div id="inventoryPanel">
@@ -79,11 +91,66 @@
         const inventoryItems   = document.getElementById('inventoryItems');
         let inventoryData      = [];
 
+        /* ---- STAT UI CONST ---- */
+        let playerStats = {
+            // Initialize with default/empty values
+            name: "Player Name",
+            class: "-",
+            level: 1,
+            experience: 0, // Add experience property
+            currentHealth: 0,
+            maxHealth: 0,
+            attack: 0,
+            defense: 0,
+            magic: 0
+        };
+
+        // --- helper function to update the stats display ---
+        function updateStatsDisplay() {
+            if (!playerStats) return; // Don't update if no stats yet
+
+            document.getElementById('statsPlayerName').textContent = playerStats.name || "Unknown";
+            document.getElementById('statsPlayerClass').textContent = playerStats.class || "-";
+            document.getElementById('statsPlayerLevel').textContent = playerStats.level !== undefined ? playerStats.level : "-"; // Update level
+            document.getElementById('statsPlayerExperience').textContent = playerStats.experience !== undefined ? playerStats.experience : "0"; // Update XP display
+            document.getElementById('statsCurrentHealth').textContent = playerStats.currentHealth !== undefined ? playerStats.currentHealth : "0";
+            document.getElementById('statsMaxHealth').textContent = playerStats.maxHealth !== undefined ? playerStats.maxHealth : "0";
+            document.getElementById('statsAttack').textContent = playerStats.attack !== undefined ? playerStats.attack : "0";
+            document.getElementById('statsDefense').textContent = playerStats.defense !== undefined ? playerStats.defense : "0";
+            document.getElementById('statsMagic').textContent = playerStats.magic !== undefined ? playerStats.magic : "0";
+
+            // Optional: Add visual feedback for low health
+            const healthPercent = playerStats.maxHealth > 0 ? (playerStats.currentHealth / playerStats.maxHealth) : 0;
+            const statsDisplay = document.getElementById('playerStatsDisplay');
+            statsDisplay.classList.remove('low-health'); // Remove class first
+            if (healthPercent < 0.3) { // Example: Red if below 30%
+                statsDisplay.classList.add('low-health');
+            }
+        }
+
+
+
+
+
         // --- Ensure your existing toggleInventory function requests the full update ---
         function toggleInventory() {
             const panel = document.getElementById('inventoryPanel');
+            const statsDisplay = document.getElementById('playerStatsDisplay'); // <-- Get stats display
             const isVisible = panel.style.display === 'block';
             panel.style.display = isVisible ? 'none' : 'block';
+
+            // <--  logic to show/hide stats display -->
+            if (statsDisplay) { // Check if element exists
+                if (isVisible) {
+                    // Inventory is being closed, show stats
+                    statsDisplay.style.display = 'block';
+                } else {
+                    // Inventory is being opened, hide stats
+                    statsDisplay.style.display = 'none';
+                }
+            }
+
+
             if (!isVisible) { // If we are opening the panel
                 sendMessage({ type: "inventory", action: "get" }); // Request full inventory data
             }
@@ -157,7 +224,7 @@
                     // Here, we'll use the "equip" action, which should toggle it off
                     // according to your C# logic (PlayerInventory.EquipItem)
                     equippedItemEl.addEventListener('click', () => {
-                        sendMessage({ type: "inventory", action: "equip", itemId: itemData.id });
+                        sendMessage({ type: "inventory", action: "use", itemId: itemData.id });
                         // Or send "use" if that's the intended way to toggle equipment
                         // sendMessage({ type: "inventory", action: "use", itemId: itemData.id });
                     });
@@ -303,6 +370,7 @@
                     document.getElementById('roomCodeDisplay').textContent = roomCode;
                     document.getElementById('joinView').style.display = 'none';
                     document.getElementById('lobbyView').style.display = 'block';
+                    playerStats.name = msg.profile.name;
                     logDebug(`Joined successfully as ${msg.profile.name}`);
                     break;
                     
@@ -323,10 +391,21 @@
                             document.getElementById('gameView').style.display = 'block';
                             // Ensure inventory is hidden when game starts
                             document.getElementById('inventoryPanel').style.display = 'none';
+                            // <-- Show stats display when game starts -->
+                            const statsDisplayElement = document.getElementById('playerStatsDisplay');
+                            if (statsDisplayElement) {
+                                statsDisplayElement.style.display = 'block'; // Show stats
+                                updateStatsDisplay(); // Update with any previously received stats
+                            }
                             break;
                         case "Lobby":
                             document.getElementById('gameView').style.display = 'none';
                             document.getElementById('lobbyView').style.display = 'block';
+                            // <-- Hide stats display when back to lobby -->
+                            const statsDisplayElementLobby = document.getElementById('playerStatsDisplay');
+                            if (statsDisplayElementLobby) {
+                                statsDisplayElementLobby.style.display = 'none';
+                            }
                             break;
                         // add other states if you need them
                     }
@@ -336,6 +415,26 @@
                     // Pass the entire message object, not just msg.items
                     handleInventoryData(msg);
                     break;
+
+                // <-- case for stats_update -->
+                case "stats_update":
+                    // Store the received stats data, including level and experience
+                    // Ensure playerStats.name is set correctly on join_success or elsewhere if needed
+                    playerStats.name = playerStats.name || "Player"; // Use existing name or default
+                    // Update stats only if they are present in the message
+                    if (msg.hasOwnProperty('role')) playerStats.class = msg.role; // this is role cause cant send class in C
+                    if (msg.hasOwnProperty('level')) playerStats.level = msg.level;
+                    if (msg.hasOwnProperty('experience')) playerStats.experience = msg.experience; // Handle XP update
+                    if (msg.hasOwnProperty('currentHealth')) playerStats.currentHealth = msg.currentHealth;
+                    if (msg.hasOwnProperty('maxHealth')) playerStats.maxHealth = msg.maxHealth;
+                    if (msg.hasOwnProperty('attack')) playerStats.attack = msg.attack;
+                    if (msg.hasOwnProperty('defense')) playerStats.defense = msg.defense;
+                    if (msg.hasOwnProperty('magic')) playerStats.magic = msg.magic;
+
+                    // Update the display with the new stats
+                    updateStatsDisplay();
+                    break;
+                // <-- End of stats_update case -->
 
                 default:
                     logDebug(`Unknown message type: ${msg.type}`);
