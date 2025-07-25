@@ -24,6 +24,7 @@ MonoBehaviour:
   animatorController: {fileID: 0}
   startingAbilities:
   - {fileID: 11400000, guid: e2ca85e47cf37814da14dd9ee4cbd0fe, type: 2}
+  - {fileID: 11400000, guid: 0e9b66ba14f3bfb448a5cfd540bdf6de, type: 2}
   startingEquipment:
   - {fileID: 11400000, guid: 69927346d4c63504cb76633e9f940e05, type: 2}
   - {fileID: 11400000, guid: 89a2956f9484fef4e96f861cfc34bc2c, type: 2}

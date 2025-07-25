@@ -10,17 +10,17 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 826cabe2270b9f044ae57bd03cad4bf9, type: 3}
-  m_Name: HealSpell
+  m_Name: SwordQuickAttack
   m_EditorClassIdentifier: 
-  abilityName: Healing Spell
+  abilityName: Sword Quick Attack
   icon: {fileID: 0}
-  manaCost: 5
-  cooldown: 5
-  supportedTargetTypes: 0000000001000000
+  manaCost: 0
+  cooldown: 2
+  supportedTargetTypes: 00000000
   range: 1
   radius: 0
-  baseEffectValue: -75
-  effectLogicSource: {fileID: 5272473619623566952, guid: 94cd515323c6d3e45b122d8e77b346ea, type: 3}
+  baseEffectValue: 10
+  effectLogicSource: {fileID: 5272473619623566952, guid: 3c1c5488a63fe77488388b267d346718, type: 3}
   effectPrefab: {fileID: 0}
   animationTrigger: 
   usableOutOfCombat: 0
