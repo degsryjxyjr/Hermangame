@@ -10,7 +10,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1214248051908397773}
   - component: {fileID: 6968316381981625622}
-  - component: {fileID: -4837137415889947222}
   - component: {fileID: -8087342676974815728}
   m_Layer: 0
   m_Name: Warrior
@@ -89,25 +88,6 @@ SpriteRenderer:
   m_WasSpriteAssigned: 1
   m_MaskInteraction: 0
   m_SpriteSortPoint: 0
---- !u!114 &-4837137415889947222
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7235997375035445226}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 2a5496e980dc9ab49b8ba0b76a208db9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  maxHealth: 0
-  currentHealth: 0
-  attackPower: 0
-  spriteRenderer: {fileID: 6968316381981625622}
-  animator: {fileID: 0}
-  data: {fileID: 11400000, guid: 8241a421de965e646a5b4f2825d5e992, type: 2}
-  playerLevel: 0
 --- !u!61 &-8087342676974815728
 BoxCollider2D:
   m_ObjectHideFlags: 0

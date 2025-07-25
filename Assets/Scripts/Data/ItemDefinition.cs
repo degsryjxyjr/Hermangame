@@ -10,14 +10,19 @@ public class ItemDefinition : ScriptableObject
     public ItemType itemType;
     
     [Header("Stacking")]
-    public bool isStackable = true;
+    public bool isStackable = false;
     public int maxStack = 1;
-    
-    [Header("Effects")]
+
+    [Header("Direct Effects (simple)")]
+    // apply simple stat changes directl
     public int healthModifier;
     public int attackModifier;
     public int defenseModifier;
     public int magicModifier;
+
+    [Header("Linked Ability (Complex Effects)")]
+    // Link to an ability for complex effects
+    public AbilityDefinition linkedAbility;
     
     [Header("Equipment")]
     public EquipmentSlot equipSlot;

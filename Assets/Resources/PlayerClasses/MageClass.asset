@@ -25,6 +25,8 @@ MonoBehaviour:
   startingAbilities: []
   startingEquipment:
   - {fileID: 11400000, guid: 69927346d4c63504cb76633e9f940e05, type: 2}
+  - {fileID: 11400000, guid: fd2c4ce97e15b844e9c12540a71dda30, type: 2}
+  - {fileID: 11400000, guid: fd2c4ce97e15b844e9c12540a71dda30, type: 2}
   healthGrowth:
     serializedVersion: 2
     m_Curve:

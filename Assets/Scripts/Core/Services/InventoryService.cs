@@ -79,14 +79,12 @@ public class InventoryService : MonoBehaviour
             Debug.LogWarning($"Cannot use item, inventory not found for player: {playerId}");
             return false;
         }
-
         var slot = inventory.GetSlot(itemId);
         if (slot == null || slot.ItemDef == null)
         {
             Debug.Log($"Cannot use item, slot or ItemDef not found for ID: {itemId}");
             return false;
         }
-
         var player = PlayerManager.Instance.GetPlayer(playerId);
         if (player == null)
         {
@@ -99,28 +97,67 @@ public class InventoryService : MonoBehaviour
         {
             case ItemDefinition.ItemType.Consumable:
                 Debug.Log($"Using consumable: {slot.ItemDef.displayName} (ID: {slot.itemId}) for player {player.LobbyData.Name}");
-                
-                // Apply stats modifiers
-                // Note: You might want more robust stat handling in PlayerGameData
-                player.GameData.stats.currentHealth = Mathf.Clamp(
-                    player.GameData.stats.currentHealth + slot.ItemDef.healthModifier,
-                    0,
-                    player.GameData.stats.maxHealth
-                );
-                player.GameData.stats.attack += slot.ItemDef.attackModifier;
-                player.GameData.stats.defense += slot.ItemDef.defenseModifier;
-                player.GameData.stats.magic += slot.ItemDef.magicModifier;
 
-                // Consume the item (reduce quantity/remove slot)
-                itemUsed = inventory.RemoveItem(itemId, 1);
-                if (itemUsed)
+                // --- NEW LOGIC FOR OPTION B (Corrected) ---
+                // Check if the item has a linked ability
+                if (slot.ItemDef.linkedAbility != null)
                 {
-                    Debug.Log($"Consumed item {slot.ItemDef.displayName}. New quantity: {slot.quantity - 1}");
+                    Debug.Log($"Consumable {slot.ItemDef.displayName} has a linked ability: {slot.ItemDef.linkedAbility.abilityName}. Executing ability logic.");
+
+                    // Execute the linked ability's logic using the CORRECTED method name
+                    // Pass 'playerId' as both the caster and the target for self-targeting consumables
+                    bool abilityExecuted = CombatService.Instance.ExecuteAbilityFromItem(
+                        casterPlayerId: playerId,
+                        targetPlayerId: playerId, // Self-targeting for potions
+                        abilityDefinition: slot.ItemDef.linkedAbility
+                    );
+
+                    if (abilityExecuted)
+                    {
+                        // Consume the item only if the ability executed successfully
+                        itemUsed = inventory.RemoveItem(itemId, 1);
+                        if (itemUsed)
+                        {
+                            Debug.Log($"Consumed item {slot.ItemDef.displayName} after using linked ability. New quantity: {slot.quantity - 1}");
+                        }
+                        else
+                        {
+                            Debug.LogWarning($"Failed to remove consumed item {slot.ItemDef.displayName} from inventory after ability use.");
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"Linked ability {slot.ItemDef.linkedAbility.abilityName} failed to execute for item {slot.ItemDef.displayName}.");
+                        itemUsed = false; // Indicate failure
+                    }
                 }
                 else
                 {
-                     Debug.LogWarning($"Failed to remove consumed item {slot.ItemDef.displayName} from inventory.");
+                    // Fallback to original simple stat modifier logic if no linked ability
+                    Debug.Log($"Consumable {slot.ItemDef.displayName} has no linked ability. Applying direct stat modifiers.");
+
+                    // Apply stats modifiers (original logic)
+                    player.GameData.stats.currentHealth = Mathf.Clamp(
+                        player.GameData.stats.currentHealth + slot.ItemDef.healthModifier,
+                        0,
+                        player.GameData.stats.maxHealth
+                    );
+                    player.GameData.stats.attack += slot.ItemDef.attackModifier;
+                    player.GameData.stats.defense += slot.ItemDef.defenseModifier;
+                    player.GameData.stats.magic += slot.ItemDef.magicModifier;
+
+                    // Consume the item (reduce quantity/remove slot)
+                    itemUsed = inventory.RemoveItem(itemId, 1);
+                    if (itemUsed)
+                    {
+                        Debug.Log($"Consumed item {slot.ItemDef.displayName} using direct modifiers. New quantity: {slot.quantity - 1}");
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"Failed to remove consumed item {slot.ItemDef.displayName} from inventory after direct modifier use.");
+                    }
                 }
+                // --- END NEW LOGIC ---
                 break;
 
             case ItemDefinition.ItemType.Equipment:
@@ -136,7 +173,6 @@ public class InventoryService : MonoBehaviour
                     Debug.LogWarning($"Failed to toggle equipment for item {slot.ItemDef.displayName}.");
                 }
                 break;
-
             default:
                 Debug.Log($"No use behavior defined for item type: {slot.ItemDef.itemType} (Item: {slot.ItemDef.displayName})");
                 itemUsed = false; // Indicate the "use" action wasn't processed meaningfully
