@@ -19,6 +19,8 @@ public class PlayerManager : MonoBehaviour
     private LobbyService _lobby;
     private CombatService _combat;
 
+    private AbilityExecutionService _abilityExecution;
+
     private InventoryService _inventory;
     private ClassManager _class;
 
@@ -45,7 +47,8 @@ public class PlayerManager : MonoBehaviour
         _combat = gameObject.AddComponent<CombatService>();
         _inventory = gameObject.AddComponent<InventoryService>();
         _class  = gameObject.AddComponent<ClassManager>();
-        Debug.Log($"Services initialized: Lobby={_lobby != null}, Combat={_combat != null}, Class={_class != null}, Inventory={_inventory != null}");
+        _abilityExecution  = gameObject.AddComponent<AbilityExecutionService>();
+        Debug.Log($"Services initialized: Lobby={_lobby != null}, Combat={_combat != null}, Class={_class != null}, Inventory={_inventory != null}, AbilityExec={_abilityExecution != null}");
     }
 
     private void Update()

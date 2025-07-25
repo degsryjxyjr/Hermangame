@@ -1,122 +1,117 @@
-// File: Scripts/Gameplay/Abilities/Effects/DamageEffect.cs
+// File: Scripts/Gameplay/Abilities/Effects/DamageEffect.cs (Updated for IDamageable)
 using UnityEngine;
 using System.Collections.Generic;
 
 /// <summary>
 /// Implements a basic damage effect based on the ability's baseEffectValue.
 /// Expects baseEffectValue to be positive (e.g., 30 deals 30 damage).
-/// Applies simple physical defense mitigation.
+/// Applies simple physical defense mitigation. Works on any IDamageable target.
 /// </summary>
 public class DamageEffect : MonoBehaviour, IAbilityEffect
 {
-    public bool Execute(PlayerConnection caster, List<PlayerConnection> targets, AbilityDefinition abilityDefinition)
+    // OLD SIGNATURE (causes CS1061):
+    // public bool Execute(PlayerManager.PlayerConnection caster, List<PlayerManager.PlayerConnection> targets, AbilityDefinition abilityDefinition)
+
+    // NEW SIGNATURE (correct for refactored system):
+    public bool Execute(PlayerConnection caster, List<IDamageable> targets, AbilityDefinition abilityDefinition)
     {
-        if (abilityDefinition == null)
-        {
-            Debug.LogWarning("DamageEffect: AbilityDefinition is null.");
-            return false;
-        }
+         if (abilityDefinition == null)
+         {
+             Debug.LogWarning("DamageEffect: AbilityDefinition is null.");
+             return false;
+         }
 
-        if (targets == null || targets.Count == 0)
-        {
-            Debug.Log($"DamageEffect: No targets specified for ability {abilityDefinition.abilityName}.");
-            // Technically executed successfully (no targets to affect), but no effect.
-            return true;
-        }
+         if (targets == null || targets.Count == 0)
+         {
+             Debug.Log($"DamageEffect: No targets specified for ability {abilityDefinition.abilityName}.");
+             return true; // Technically executed successfully (no targets to affect)
+         }
 
-        // baseEffectValue is expected to be positive for damage.
-        int baseDamage = abilityDefinition.baseEffectValue;
+         // baseEffectValue is expected to be positive for damage.
+         int baseDamage = abilityDefinition.baseEffectValue;
 
-        if (baseDamage <= 0)
-        {
-            Debug.Log($"DamageEffect: Ability {abilityDefinition.abilityName} has no damage value ({abilityDefinition.baseEffectValue}).");
-            return true; // Technically executed, just no effect.
-        }
+         if (baseDamage <= 0)
+         {
+             Debug.Log($"DamageEffect: Ability {abilityDefinition.abilityName} has no damage value ({abilityDefinition.baseEffectValue}).");
+             return true; // Technically executed, just no effect.
+         }
 
-        bool success = false;
-        List<string> damagedTargetNames = new List<string>();
+         bool success = false;
+         List<string> damagedTargetNames = new List<string>();
 
-        foreach (var target in targets)
-        {
-            if (target == null || !target.IsAlive()) // Check if target is valid and alive
-            {
-                Debug.Log($"DamageEffect: Skipping null or dead target for ability {abilityDefinition.abilityName}.");
-                continue;
-            }
+         foreach (var target in targets)
+         {
+             // --- CRITICAL CHANGE: Check IsAlive ---
+             // Cannot damage a dead target.
+             if (target != null && target.IsAlive())
+             {
+                 // --- DAMAGE CALCULATION (Placeholder) ---
+                 // This is a simplified example. You might access target stats differently
+                 // or pass them through the ability definition/context.
+                 // For now, assume a fixed mitigation or get it creatively.
+                 // Let's assume a basic mitigation, but we don't have Defense directly from IDamageable.
+                 // We could pass caster/target stats through the context or ability def if needed,
+                 // or assume the baseDamage is already the final damage to apply.
+                 // For prototype, let's apply base damage directly, or add simple logic if target has a known type.
+                 int damageToApply = baseDamage;
 
-            // --- Apply Damage Calculation (Simple Physical) ---
-            // Example: Damage = Max(1, BaseDamage - (Defense / 10))
-            // This is a placeholder formula. You can make it more complex.
-            int damageDealt = Mathf.Max(1, baseDamage - Mathf.FloorToInt(target.Defense / 10f));
-            // --- End Damage Calculation ---
+                 // Example: If you know the target might have a Defense-like property indirectly,
+                 // you'd need a different approach. For now, simple.
+                 // You could potentially pass more data through the call chain if needed.
 
-            int healthBefore = target.CurrentHealth;
-            target.CurrentHealth = Mathf.Clamp(
-                target.CurrentHealth - damageDealt,
-                0,
-                target.MaxHealth
-            );
-            int actualDamage = healthBefore - target.CurrentHealth; // Should be equal to damageDealt if not clamped
+                 // --- CALL TakeDamage INSTEAD OF ACCESSING .CurrentHealth ---
+                 // Assume Physical damage type for now, or get from abilityDef if you add that.
+                 int actualDamage = target.TakeDamage(damageToApply, DamageType.Physical);
 
-            if (actualDamage > 0)
-            {
-                Debug.Log($"DamageEffect: Dealt {actualDamage} damage to {target.LobbyData?.Name ?? "Unknown Target"}. New HP: {target.CurrentHealth}/{target.MaxHealth}");
-                damagedTargetNames.Add(target.LobbyData?.Name ?? "Unknown Target");
-                success = true; // At least one target was damaged
+                 if (actualDamage > 0)
+                 {
+                     // Get name via IEntity interface
+                     string targetName = (target as IEntity)?.GetEntityName() ?? "Unknown Target";
+                     Debug.Log($"DamageEffect: Dealt {actualDamage} damage to {targetName}.");
+                     damagedTargetNames.Add(targetName);
+                     success = true; // At least one target was damaged
 
-                // Send stats update to the damaged target's client
-                GameServer.Instance.SendToPlayer(target.NetworkId, new
-                {
-                    type = "stats_update",
-                    currentHealth = target.CurrentHealth,
-                    maxHealth = target.MaxHealth
-                });
+                     // --- CHECK FOR DEATH (TakeDamage might handle this internally, or we check IsAlive) ---
+                     if (!target.IsAlive())
+                     {
+                         Debug.Log($"DamageEffect: {targetName} has been defeated!");
+                         // TODO: Handle death (trigger events, inform EncounterManager/CombatService, loot drops)
+                         // This might be handled inside the target's TakeDamage implementation (e.g., EnemyEntity.OnDeath)
+                     }
 
-                // --- Check for Target Death ---
-                if (!target.IsAlive())
-                {
-                    Debug.Log($"DamageEffect: {target.LobbyData?.Name ?? "Unknown Target"} has been defeated!");
-                    // TODO: Handle death (trigger OnDeath event, inform combat service, etc.)
-                    // Example placeholder for death event
-                    // target.OnDeath?.Invoke(); // If you add an event
-                    // CombatService.Instance?.HandlePlayerDefeat(target.NetworkId); // Notify combat system
-                }
-                // --- End Check for Target Death ---
-            }
-            else
-            {
-                 // This case should be rare with Max(1, ...), but handle if damage is fully mitigated
-                 Debug.Log($"DamageEffect: Damage of {baseDamage} was fully mitigated for {target.LobbyData?.Name ?? "Unknown Target"}.");
-            }
-        }
+                     // --- SEND STATS UPDATE ---
+                     // Similar to heal, the target's TakeDamage implementation should handle sending updates
+                     // if it's a PlayerConnection. For enemies, it might be handled differently.
+                 }
+                 else
+                 {
+                     string targetName = (target as IEntity)?.GetEntityName() ?? "Unknown Target";
+                     Debug.Log($"DamageEffect: Damage of {damageToApply} was fully mitigated for {targetName}.");
+                 }
+             }
+             else
+             {
+                 // Target is null or already dead
+                 Debug.Log($"DamageEffect: Skipping null or dead target.");
+             }
+         }
 
-        // Send effect message to the caster's client
-        if (success)
-        {
-            string targetNames = string.Join(", ", damagedTargetNames);
-            string message = damagedTargetNames.Count > 1 ?
-                $"You dealt {baseDamage} damage to {targetNames} (mitigated)." : // Simplified message
-                $"You dealt {baseDamage} damage to {targetNames} (mitigated)."; // Simplified message
+         // Send effect message to the caster's client
+         if (success)
+         {
+             string targetNames = string.Join(", ", damagedTargetNames);
+             // Simplified message, could be more detailed
+             string message = damagedTargetNames.Count > 1 ?
+                 $"You attacked {targetNames}." : // Generic message, damage amount might be in stats_update or VFX
+                 $"You attacked {targetNames}.";
 
-            GameServer.Instance.SendToPlayer(caster.NetworkId, new
-            {
-                type = "ability_effect", // Or a more specific type like "damage_effect"
-                message = message
-            });
-        }
-        else
-        {
-             // Optional: Send a message if no targets were damaged
-             // GameServer.Instance.SendToPlayer(caster.NetworkId, new
-             // {
-             //     type = "ability_effect",
-             //     message = "Your attack was fully resisted."
-             // });
-        }
+             GameServer.Instance.SendToPlayer(caster.NetworkId, new
+             {
+                 type = "ability_effect",
+                 message = message
+             });
+         }
 
-        // Note: CombatService/ExecuteAbility is responsible for triggering animations/VFX
-        // and deducting mana if needed, based on abilityDefinition properties.
-
-        return success || (baseDamage > 0); // Return true if intended to damage, even if no targets were affected
+         return success || (baseDamage > 0);
     }
 }

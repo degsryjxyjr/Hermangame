@@ -40,6 +40,12 @@ public class PlayerConnection : IEntity, IDamageable, IHealable
     public List<AbilityDefinition> UnlockedAbilities { get; set; } = new List<AbilityDefinition>();
     // Inventory is managed by InventoryService, no direct field needed here
 
+    // --- Reference Counting for Item-Granted Abilities ---
+    // Key: AbilityDefinition, Value: Number of equipped items granting this ability
+    private Dictionary<AbilityDefinition, int> _itemGrantedAbilityCounts = new Dictionary<AbilityDefinition, int>();
+    // --- End Reference Counting ---
+
+
     // --- Constructor ---
     public PlayerConnection(string networkId)
     {
@@ -190,14 +196,15 @@ public class PlayerConnection : IEntity, IDamageable, IHealable
         return actualHeal;
     }
     // --- End Implementation of IHealable ---
-    
+
     // --- Implementation of IEquipmentEffect ---
-    
+
     /// <summary>
     /// Applies the effects of an equipped item to the player.
     /// This method determines the type of effect and applies it.
     /// </summary>
     /// <param name="equippedItem">The ItemDefinition of the item being equipped.</param>
+    // Inside PlayerManager.PlayerConnection.cs
     public void OnEquipItem(ItemDefinition equippedItem)
     {
         if (equippedItem == null)
@@ -206,72 +213,158 @@ public class PlayerConnection : IEntity, IDamageable, IHealable
             return;
         }
 
-        // 1. Try to get a specific IEquipmentEffect script
-        IEquipmentEffect customEffect = equippedItem.GetEquipmentEffect();
-        if (customEffect != null)
+        // Get the list of IEquipmentEffect scripts
+        List<IEquipmentEffect> effects = equippedItem.GetEquipmentEffects();
+
+        if (effects.Count > 0)
         {
-            // 2a. If found, delegate the application to the custom effect script
-            customEffect.ApplyEffect(this, equippedItem);
-            Debug.Log($"Applied custom equipment effect '{customEffect.GetType().Name}' from {equippedItem.displayName}.");
+            // Apply each effect
+            foreach (var effect in effects)
+            {
+                effect.ApplyEffect(this, equippedItem);
+                Debug.Log($"Applied equipment effect '{effect.GetType().Name}' from {equippedItem.displayName}.");
+            }
         }
         else
         {
-            // 2b. If no custom effect, apply basic stat bonuses directly (fallback)
-            // This replicates the logic that was previously in InventoryService or could be its own simple effect script.
+            // Fallback to direct stat modification if no custom effects are found
             ApplyBasicStatBonuses(equippedItem);
-            Debug.Log($"Applied basic stat bonuses from {equippedItem.displayName} (no custom effect script).");
+            Debug.Log($"Applied basic stat bonuses from {equippedItem.displayName} (no custom effect scripts).");
         }
+        // Note: Individual effect scripts should handle sending stats_update if needed.
+        
+            // 2. Grant Linked Abilities (with Reference Counting)
+            if (equippedItem.linkedAbilities != null)
+            {
+                foreach (var ability in equippedItem.linkedAbilities)
+                {
+                    if (ability != null)
+                    {
+                        // Initialize count to 0 if not present
+                        if (!_itemGrantedAbilityCounts.ContainsKey(ability))
+                        {
+                            _itemGrantedAbilityCounts[ability] = 0;
+                        }
 
-        // Note: The specific effect script (BasicStatBonusEffect or custom ones) is responsible
-        // for calling SendStatsUpdateToClient() if needed.
-        // If applying multiple types of effects, you might call it once at the end here instead.
-        // For now, let's assume the effect script handles it.
-        // SendStatsUpdateToClient(); 
+                        // Increment count
+                        _itemGrantedAbilityCounts[ability]++;
+
+                        // Only add to UnlockedAbilities if:
+                        // 1. This is the first item granting it (count was 0, now 1)
+                        // AND 2. It's not already in UnlockedAbilities
+                        if (_itemGrantedAbilityCounts[ability] == 1 && 
+                            !this.UnlockedAbilities.Contains(ability))
+                        {
+                            this.UnlockedAbilities.Add(ability);
+                            Debug.Log($"Granted ability '{ability.abilityName}' from item '{equippedItem.displayName}' to player '{this.LobbyData.Name}' (RefCount: {_itemGrantedAbilityCounts[ability]})");
+                        }
+                        else
+                        {
+                            Debug.Log($"Player '{this.LobbyData.Name}' already knows ability '{ability.abilityName}'. Incremented item-grant RefCount to {_itemGrantedAbilityCounts[ability]} from item '{equippedItem.displayName}'");
+                        }
+                        // --- End Reference Counting Logic ---
+                    }
+                }
+            }
+            // --- End Grant Linked Abilities ---
     }
 
-        /// <summary>
-        /// Removes the effects of an unequipped item from the player.
-        /// </summary>
-        /// <param name="unequippedItem">The ItemDefinition of the item being unequipped.</param>
-        public void OnUnequipItem(ItemDefinition unequippedItem)
+    public void OnUnequipItem(ItemDefinition unequippedItem)
+    {
+        if (unequippedItem == null)
         {
-            if (unequippedItem == null)
-            {
-                Debug.LogWarning("Attempted to unequip a null item.");
-                return;
-            }
-
-            // 1. Try to get the specific IEquipmentEffect script
-            IEquipmentEffect customEffect = unequippedItem.GetEquipmentEffect();
-            if (customEffect != null)
-            {
-                // 2a. If found, delegate the removal to the custom effect script
-                // **** THIS IS THE CRITICAL CALL ****
-                customEffect.RemoveEffect(this, unequippedItem);
-                Debug.Log($"Removed custom equipment effect '{customEffect.GetType().Name}' from {unequippedItem.displayName}.");
-            }
-            else
-            {
-                // 2b. If no custom effect, remove basic stat bonuses directly (fallback)
-                RemoveBasicStatBonuses(unequippedItem);
-                Debug.Log($"Removed basic stat bonuses from {unequippedItem.displayName} (no custom effect script).");
-            }
-            // Note: The specific effect script handles client updates.
-            SendStatsUpdateToClient(); 
+            Debug.LogWarning("Attempted to unequip a null item.");
+            return;
         }
 
-        // --- Helper methods for direct stat modification (used as fallback) ---
-        // These can also be the logic inside a default/standard IEquipmentEffect script like BasicStatBonusEffect.
 
-        private void ApplyBasicStatBonuses(ItemDefinition item)
+        // 1. Remove Stat Bonuses (via IEquipmentEffect or direct)
+
+        // Get the list of IEquipmentEffect scripts
+        List<IEquipmentEffect> effects = unequippedItem.GetEquipmentEffects();
+        if (effects.Count > 0)
         {
-            this.Attack += item.attackModifier;
-            this.Defense += item.defenseModifier;
-            this.Magic += item.magicModifier;
-            // this.MaxHealth += item.healthModifier; // Add if used
-            Debug.Log($"Applied basic bonuses: +{item.attackModifier} ATK, +{item.defenseModifier} DEF, +{item.magicModifier} MAG");
-            SendStatsUpdateToClient();
+            // Remove each effect
+            foreach (var effect in effects)
+            {
+                effect.RemoveEffect(this, unequippedItem);
+                Debug.Log($"Removed equipment effect '{effect.GetType().Name}' from {unequippedItem.displayName}.");
+            }
         }
+        else
+        {
+            // Fallback to removing direct stat modification
+            RemoveBasicStatBonuses(unequippedItem);
+            Debug.Log($"Removed basic stat bonuses from {unequippedItem.displayName} (no custom effect scripts).");
+        }
+        // Note: Individual effect scripts should handle sending stats_update if needed.
+
+
+        // 2. Revoke Linked Abilities (with Reference Counting)
+        if (unequippedItem.linkedAbilities != null)
+        {
+            foreach (var ability in unequippedItem.linkedAbilities)
+            {
+                if (ability != null && _itemGrantedAbilityCounts.ContainsKey(ability))
+                {
+                    // Decrement count
+                    _itemGrantedAbilityCounts[ability]--;
+
+                    // Only remove from UnlockedAbilities if:
+                    // 1. No more items grant this ability (count reached 0)
+                    // AND 2. The ability wasn't granted by other means (like class)
+                    if (_itemGrantedAbilityCounts[ability] <= 0)
+                    {
+                        _itemGrantedAbilityCounts.Remove(ability);
+                        
+                        // Only remove if the ability is marked as item-granted
+                        // (This is the key fix - we need to track permanent abilities separately)
+                        if (ShouldRemoveAbility(ability))
+                        {
+                            if (this.UnlockedAbilities.Remove(ability))
+                            {
+                                Debug.Log($"Revoked ability '{ability.abilityName}' from player '{this.LobbyData.Name}' (was granted by item '{unequippedItem.displayName}'). No other items grant it.");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        Debug.Log($"Decremented item-grant RefCount for ability '{ability.abilityName}' to {_itemGrantedAbilityCounts[ability]} for player '{this.LobbyData.Name}' (unequipped '{unequippedItem.displayName}'). Ability NOT removed.");
+                    }
+                }
+            }
+        }
+            // --- End Revoke Linked Abilities ---
+
+    }
+
+    // --- Helper methods for direct stat modification (used as fallback) ---
+    // These can also be the logic inside a default/standard IEquipmentEffect script like BasicStatBonusEffect.
+
+
+    private bool ShouldRemoveAbility(AbilityDefinition ability)
+    {
+        // If the ability is part of the class's permanent abilities, don't remove it
+        if (this.ClassDefinition != null && 
+            this.ClassDefinition.startingAbilities.Contains(ability))
+        {
+            return false;
+        }
+        
+        // Add other checks here if you have other ways to permanently grant abilities
+        
+        return true;
+    }
+
+    private void ApplyBasicStatBonuses(ItemDefinition item)
+    {
+        this.Attack += item.attackModifier;
+        this.Defense += item.defenseModifier;
+        this.Magic += item.magicModifier;
+        // this.MaxHealth += item.healthModifier; // Add if used
+        Debug.Log($"Applied basic bonuses: +{item.attackModifier} ATK, +{item.defenseModifier} DEF, +{item.magicModifier} MAG");
+        SendStatsUpdateToClient();
+    }
 
         private void RemoveBasicStatBonuses(ItemDefinition item)
         {

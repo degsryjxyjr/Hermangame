@@ -9,8 +9,9 @@ using System.Linq; // For finding abilities/items if needed
 public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable // Add IAbilityEffect target if needed
 {
     [Header("Configuration")]
-    [SerializeField] private EnemyDefinition _enemyDefinition;
+    [SerializeField] public EnemyDefinition _enemyDefinition;
     [SerializeField] private int _level = 1; // Instance level
+    
 
     [Header("Runtime State")]
     // These could potentially be in a separate RuntimeStats class like PlayerConnection, but simpler here for now.
@@ -20,6 +21,7 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable // Add
     public int Defense { get; private set; }
     public int Magic { get; private set; }
 
+    
     // Reference to the list of abilities this enemy instance can use
     public List<AbilityDefinition> UnlockedAbilities { get; private set; } = new List<AbilityDefinition>();
 
@@ -27,6 +29,23 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable // Add
     // For simplicity, let's assume a basic inventory or just starting equipment applied to stats
     // A full inventory system for enemies is complex. For now, equipment modifies stats.
     // You could have a simplified EnemyInventory if needed later.
+
+    // --- Reference to EncounterManager ---
+    // This allows the enemy to notify the manager of its death.
+    // The EncounterManager can set this when spawning the enemy.
+    [HideInInspector] public EncounterManager EncounterManager { get; set; } = null;
+
+
+    /// <summary>
+    /// Sets the enemy definition and level, then initializes stats
+    /// </summary>
+    public void SetEnemyDefinition(EnemyDefinition definition, int level = 1)
+    {
+        _enemyDefinition = definition;
+        _level = level;
+        InitializeFromDefinition(level);
+    }
+
 
     private void Awake()
     {
@@ -180,11 +199,22 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable // Add
             }
         }
 
-        // 2. Notify CombatService or EncounterManager about death and loot
-        // The system managing the encounter should handle distributing loot to players.
-        // You might have an event or direct call.
-        // Example: EncounterManager.Instance?.OnEnemyKilled(this, droppedItems);
-
+        // 2. Notify EncounterManager (NEW)
+        // This is the key change. The enemy tells the manager it died.
+        if (EncounterManager != null)
+        {
+            // The EncounterManager will handle removing this enemy from its lists
+            // and checking win conditions.
+            EncounterManager.OnEnemyDefeatedInternal(this);
+        }
+        else
+        {
+            Debug.LogWarning($"Enemy {this.GetEntityName()} died but has no EncounterManager reference. " +
+                             "It won't be removed from encounter tracking.");
+            // Fallback: Destroy self
+            Destroy(this.gameObject);
+            return;
+        }
         // 3. Trigger visual/audio feedback (animation, VFX, sound)
         // This might involve an animation controller or VFX spawner attached to this GameObject.
         // GetComponent<Animator>()?.SetTrigger("Die");

@@ -51,6 +51,21 @@ public class AbilityDefinition : ScriptableObject
         AllEnemies      // All hostile targets
         // Add more as needed (e.g., DeadAlly for resurrection?)
     }
+    // --- Link Effect Logic ---
+    /// <summary>
+    /// Gets the IAbilityEffect script associated with this ability.
+    /// </summary>
+    /// <returns>The IAbilityEffect instance, or null if not found.</returns>
+    public IAbilityEffect GetEffectLogic()
+    {
+        if (effectLogicSource != null)
+        {
+            return effectLogicSource.GetComponent<IAbilityEffect>();
+        }
+        // Debug.LogWarning($"AbilityDefinition {this.abilityName} has no effectLogicSource assigned.");
+        return null;
+    }
+    // --- END Link Effect Logic ---
 
     // --- Helper Methods (Optional but useful) ---
 
@@ -59,7 +74,7 @@ public class AbilityDefinition : ScriptableObject
     /// </summary>
     public bool CanTargetSelf()
     {
-        return supportedTargetTypes.Contains(TargetType.Self) || 
+        return supportedTargetTypes.Contains(TargetType.Self) ||
                supportedTargetTypes.Contains(TargetType.SingleAlly) || // Assuming caster is a valid SingleAlly target
                supportedTargetTypes.Contains(TargetType.Area) || // Caster can target self's location for area
                supportedTargetTypes.Contains(TargetType.AllAllies); // Caster is part of AllAllies

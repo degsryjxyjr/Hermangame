@@ -1,14 +1,19 @@
-// File: Scripts/Gameplay/Abilities/Effects/GenericHealEffect.cs
+// File: Scripts/Gameplay/Abilities/Effects/GenericHealEffect.cs (Updated for IDamageable/IHealable)
 using UnityEngine;
 using System.Collections.Generic;
 
 /// <summary>
 /// Implements a heal effect based on the ability's baseEffectValue.
 /// Expects baseEffectValue to be negative (e.g., -50 heals for 50 HP).
+/// Works on any target implementing IHealable.
 /// </summary>
 public class GenericHealEffect : MonoBehaviour, IAbilityEffect
 {
-    public bool Execute(PlayerConnection caster, List<PlayerConnection> targets, AbilityDefinition abilityDefinition)
+    // OLD SIGNATURE (causes CS1061):
+    // public bool Execute(PlayerManager.PlayerConnection caster, List<PlayerManager.PlayerConnection> targets, AbilityDefinition abilityDefinition)
+
+    // NEW SIGNATURE (correct for refactored system):
+    public bool Execute(PlayerConnection caster, List<IDamageable> targets, AbilityDefinition abilityDefinition)
     {
         if (abilityDefinition == null)
         {
@@ -19,8 +24,7 @@ public class GenericHealEffect : MonoBehaviour, IAbilityEffect
         if (targets == null || targets.Count == 0)
         {
             Debug.Log($"GenericHealEffect: No targets specified for ability {abilityDefinition.abilityName}.");
-            // Technically executed successfully (no targets to affect), but no effect.
-            return true;
+            return true; // Technically executed successfully (no targets to affect)
         }
 
         // baseEffectValue is expected to be negative for heals.
@@ -38,37 +42,38 @@ public class GenericHealEffect : MonoBehaviour, IAbilityEffect
 
         foreach (var target in targets)
         {
-            if (target == null || !target.IsAlive()) // Check if target is valid and alive
+            // --- CRITICAL CHANGE: Check for IHealable and IsAlive ---
+            // IDamageable is a base interface. We need IHealable for healing.
+            // Also check if the target is alive before attempting to heal.
+            if (target is IHealable healableTarget && target.IsAlive())
             {
-                Debug.Log($"GenericHealEffect: Skipping null or dead target for ability {abilityDefinition.abilityName}.");
-                continue;
-            }
+                // --- CALL ReceiveHealing INSTEAD OF ACCESSING .CurrentHealth ---
+                int actualHeal = healableTarget.ReceiveHealing(healAmount);
 
-            int healthBefore = target.CurrentHealth;
-            target.CurrentHealth = Mathf.Clamp(
-                target.CurrentHealth + healAmount,
-                0,
-                target.MaxHealth
-            );
-            int actualHeal = target.CurrentHealth - healthBefore;
-
-            if (actualHeal > 0)
-            {
-                Debug.Log($"GenericHealEffect: Healed {target.LobbyData?.Name ?? "Unknown Target"} for {actualHeal}. New HP: {target.CurrentHealth}/{target.MaxHealth}");
-                healedTargetNames.Add(target.LobbyData?.Name ?? "Unknown Target");
-                success = true; // At least one target was healed
-
-                // Send stats update to the healed target's client
-                GameServer.Instance.SendToPlayer(target.NetworkId, new
+                if (actualHeal > 0)
                 {
-                    type = "stats_update",
-                    currentHealth = target.CurrentHealth,
-                    maxHealth = target.MaxHealth
-                });
+                    // Get name via IEntity interface (both PlayerConnection and EnemyEntity should implement this)
+                    string targetName = (target as IEntity)?.GetEntityName() ?? "Unknown Target";
+                    Debug.Log($"GenericHealEffect: Healed {targetName} for {actualHeal} HP.");
+                    healedTargetNames.Add(targetName);
+                    success = true; // At least one target was healed
+
+                    // --- SEND STATS UPDATE ---
+                    // For PlayerConnection, ReceiveHealing should handle sending stats_update.
+                    // For EnemyEntity, you might need to broadcast the change if observed.
+                    // If you need to send a specific heal message:
+                    // GameServer.Instance.SendToPlayer(caster.NetworkId, new { type = "ability_effect", message = $"You healed {targetName} for {actualHeal} HP." });
+                }
+                else
+                {
+                    string targetName = (target as IEntity)?.GetEntityName() ?? "Unknown Target";
+                    Debug.Log($"GenericHealEffect: Heal of {healAmount} had no effect on {targetName}.");
+                }
             }
             else
             {
-                 Debug.Log($"GenericHealEffect: Heal of {healAmount} had no effect on {target.LobbyData?.Name ?? "Unknown Target"} (already at full HP?).");
+                string targetName = (target as IEntity)?.GetEntityName() ?? "Unknown/Invalid Target";
+                Debug.Log($"GenericHealEffect: Skipping target {targetName} (not IHealable or not alive).");
             }
         }
 
@@ -79,27 +84,14 @@ public class GenericHealEffect : MonoBehaviour, IAbilityEffect
             string message = healedTargetNames.Count > 1 ?
                 $"You healed {targetNames} for {healAmount} HP each." :
                 $"You healed {targetNames} for {healAmount} HP.";
-                
+
             GameServer.Instance.SendToPlayer(caster.NetworkId, new
             {
-                type = "ability_effect", // Or a more specific type like "heal_effect"
+                type = "ability_effect",
                 message = message
             });
         }
-        else
-        {
-             // Optional: Send a message if no targets were healed
-             // GameServer.Instance.SendToPlayer(caster.NetworkId, new
-             // {
-             //     type = "ability_effect",
-             //     message = "The heal had no effect."
-             // });
-        }
 
-
-        // Note: CombatService/ExecuteAbility is responsible for triggering animations/VFX
-        // and deducting mana if needed, based on abilityDefinition properties.
-
-        return success || (healAmount > 0); // Return true if intended to heal, even if no targets were affected
+        return success || (healAmount > 0);
     }
 }

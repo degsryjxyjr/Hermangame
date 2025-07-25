@@ -22,7 +22,9 @@ MonoBehaviour:
   attackModifier: 10
   defenseModifier: 0
   magicModifier: 0
-  linkedAbility: {fileID: 11400000, guid: 9aeaef3bc4167a94d8e7c0a8ae7d3bff, type: 2}
+  linkedAbilities:
+  - {fileID: 11400000, guid: 9aeaef3bc4167a94d8e7c0a8ae7d3bff, type: 2}
+  - {fileID: 11400000, guid: a11c4067eddfb8a48b2b51774813b8e7, type: 2}
   equipSlot: 1
-  equipmentEffectSource: {fileID: 0}
+  equipmentEffectSources: []
   modelPrefab: {fileID: 7235997375035445226, guid: 00b1f92888d602d48b48bdfe85abdc7b, type: 3}

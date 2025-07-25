@@ -1,6 +1,8 @@
 // File: Scripts/Data/ItemDefinition.cs
 using UnityEngine;
 using System; // Add if not already present
+using System.Collections.Generic;
+using System.Linq;
 
 [CreateAssetMenu(menuName = "Game/Item")]
 public class ItemDefinition : ScriptableObject
@@ -28,9 +30,9 @@ public class ItemDefinition : ScriptableObject
     public int defenseModifier;
     public int magicModifier;
 
-    [Header("Linked Ability (Complex Effects)")]
-    // Link to an ability for complex effects
-    public AbilityDefinition linkedAbility;
+    [Header("Linked Abilities (Complex Effects)")]
+    [Tooltip("List of abilities granted or used by this item.")]
+    public List<AbilityDefinition> linkedAbilities = new List<AbilityDefinition>(); 
     
     [Header("Equipment")]
     public EquipmentSlot equipSlot; // Crucial for the new system
@@ -48,19 +50,30 @@ public class ItemDefinition : ScriptableObject
 
     [Header("Equipment Effect (Passive) (Can handle complex effects)")]
     [Tooltip("Drag a GameObject with an IEquipmentEffect script attached here. Defines passive bonuses.")]
-    public GameObject equipmentEffectSource; // Reference to a GameObject holding the effect script
+    public List<GameObject> equipmentEffectSources = new List<GameObject>(); // Reference to a GameObject holding the effect script
 
     /// <summary>
-    /// Gets the IEquipmentEffect script associated with this item.
+    /// Gets the list of IEquipmentEffect scripts associated with this item.
     /// </summary>
-    /// <returns>The IEquipmentEffect instance, or null if not found.</returns>
-    public IEquipmentEffect GetEquipmentEffect()
+    /// <returns>A list of IEquipmentEffect instances (can be empty).</returns>
+    public List<IEquipmentEffect> GetEquipmentEffects()
     {
-        if (equipmentEffectSource != null)
+        List<IEquipmentEffect> effects = new List<IEquipmentEffect>();
+        if (equipmentEffectSources != null)
         {
-            return equipmentEffectSource.GetComponent<IEquipmentEffect>();
+            foreach (var sourceGO in equipmentEffectSources)
+            {
+                if (sourceGO != null)
+                {
+                    var effect = sourceGO.GetComponent<IEquipmentEffect>();
+                    if (effect != null)
+                    {
+                        effects.Add(effect);
+                    }
+                }
+            }
         }
-        return null;
+        return effects;
     }
 
     

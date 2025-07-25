@@ -130,37 +130,68 @@ public class InventoryService : MonoBehaviour
                 Debug.Log($"Using consumable: {itemSlotToUse.ItemDef.displayName} (ID: {itemSlotToUse.itemId}) for player {player.LobbyData.Name}");
 
                 bool itemConsumed = false;
-                if (itemSlotToUse.ItemDef.linkedAbility != null)
+                // --- Check for Linked Abilities (UPDATED to use List) ---
+                // NEW (correct for List):
+                if (itemSlotToUse.ItemDef.linkedAbilities != null && itemSlotToUse.ItemDef.linkedAbilities.Count > 0)
                 {
-                    Debug.Log($"Consumable {itemSlotToUse.ItemDef.displayName} has a linked ability: {itemSlotToUse.ItemDef.linkedAbility.abilityName}. Executing via CombatService.");
+                    // --- Execute the FIRST linked ability (UPDATED logic) ---
+                    // OLD (causes CS1061): AbilityDefinition abilityDef = itemSlotToUse.ItemDef.linkedAbility;
+                    // NEW (correct for List): Get the first ability from the list
+                    AbilityDefinition primaryLinkedAbility = itemSlotToUse.ItemDef.linkedAbilities[0];
 
-                    bool abilityExecuted = CombatService.Instance.ExecuteAbilityFromItem(
-                        casterPlayerId: playerId,
-                        targetPlayerId: playerId, // Self-targeting for potions
-                        abilityDefinition: itemSlotToUse.ItemDef.linkedAbility
-                    );
-
-                    if (abilityExecuted)
+                    // Add a null check for safety
+                    if (primaryLinkedAbility != null)
                     {
-                        itemConsumed = inventory.RemoveItemFromBag(itemId, 1); // Assumes consumables are used from bag
-                        if (itemConsumed)
+                        Debug.Log($"Consumable {itemSlotToUse.ItemDef.displayName} has a linked ability: {primaryLinkedAbility.abilityName}. Executing via AbilityExecutionService.");
+
+                        // --- CORRECTED CALL TO ABILITYEXECUTIONSERVICE ---
+                        // Get the caster PlayerConnection instance
+                        var casterConnection = player; // 'player' is the PlayerConnection instance from earlier in UseItem
+
+                        // Determine the target. For consumables, it's usually the user.
+                        // Get the target IDamageable instance. PlayerConnection implements IDamageable.
+                        IDamageable targetConnection = player; // Self-targeting
+
+                        // Call the correct method on the AbilityExecutionService singleton
+                        bool abilityExecuted = AbilityExecutionService.Instance.ExecuteAbilityFromItem(
+                            caster: casterConnection,         
+                            target: targetConnection,         
+                            abilityDefinition: primaryLinkedAbility // Pass the FIRST AbilityDefinition from the list
+                        );
+                        // --- END CORRECTED CALL ---
+
+                        if (abilityExecuted)
                         {
-                            Debug.Log($"Successfully consumed item {itemSlotToUse.ItemDef.displayName} after linked ability execution.");
+                            // Only consume the item if the ability executed successfully
+                            itemConsumed = inventory.RemoveItemFromBag(itemId, 1);
+                            if (itemConsumed)
+                            {
+                                Debug.Log($"Successfully consumed item {itemSlotToUse.ItemDef.displayName} after linked ability execution.");
+                            }
+                            else
+                            {
+                                Debug.LogWarning($"Failed to remove consumed item {itemSlotToUse.ItemDef.displayName} from inventory after ability use.");
+                            }
                         }
                         else
                         {
-                            Debug.LogWarning($"Failed to remove consumed item {itemSlotToUse.ItemDef.displayName} from inventory after ability use.");
+                            Debug.LogWarning($"Linked ability {primaryLinkedAbility.abilityName} failed to execute for item {itemSlotToUse.ItemDef.displayName}. Item not consumed.");
+                            itemConsumed = false; // Indicate failure
                         }
                     }
                     else
                     {
-                        Debug.LogWarning($"Linked ability {itemSlotToUse.ItemDef.linkedAbility.abilityName} failed to execute for item {itemSlotToUse.ItemDef.displayName}. Item not consumed.");
+                        Debug.LogWarning($"Consumable {itemSlotToUse.ItemDef.displayName} has a null primary linked ability in its list.");
+                        // Handle this case (e.g., fallback to direct stat mods, or treat as failed use)
+                        itemConsumed = false;
                     }
                 }
                 else
                 {
-                    Debug.Log($"Consumable {itemSlotToUse.ItemDef.displayName} has no linked ability. Applying direct stat modifiers (fallback).");
+                    // --- Fallback: Direct Stat Modification (if no linked abilities) ---
+                    Debug.Log($"Consumable {itemSlotToUse.ItemDef.displayName} has no linked abilities. Applying direct stat modifiers (fallback).");
 
+                    // Apply stats modifiers directly to PlayerConnection (using the new direct properties)
                     player.CurrentHealth = Mathf.Clamp(
                         player.CurrentHealth + itemSlotToUse.ItemDef.healthModifier,
                         0,
@@ -170,6 +201,7 @@ public class InventoryService : MonoBehaviour
                     player.Defense += itemSlotToUse.ItemDef.defenseModifier;
                     player.Magic += itemSlotToUse.ItemDef.magicModifier;
 
+                    // Send stats update to client
                     GameServer.Instance.SendToPlayer(player.NetworkId, new
                     {
                         type = "stats_update",
@@ -180,7 +212,7 @@ public class InventoryService : MonoBehaviour
                         magic = player.Magic
                     });
 
-                    // Assumes consumables are used from the bag list
+                    // Consume the item
                     itemConsumed = inventory.RemoveItemFromBag(itemId, 1);
                     if (itemConsumed)
                     {
@@ -191,6 +223,9 @@ public class InventoryService : MonoBehaviour
                         Debug.LogWarning($"Failed to remove consumed item {itemSlotToUse.ItemDef.displayName} from inventory after direct modifier use.");
                     }
                 }
+                // Return true if the item use process (including consumption attempt) was initiated
+                return itemConsumed; // Simplified success check
+            // --- End Consumable Case ---
                 itemUsed = itemConsumed;
                 break;
 
