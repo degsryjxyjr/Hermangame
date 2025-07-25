@@ -53,7 +53,7 @@
         <div id="inventoryPanel">
             <div class="inventory-header">
                 <h3>Inventory</h3>
-                <button id="closeInventory">×</button>
+                <button id="closeInventory">X</button>
             </div>
             <div id="equippedSection">
                 <h4>Equipped</h4>
@@ -356,6 +356,8 @@
                 logDebug("Disconnected from server");
                 document.getElementById('joinView').style.display = 'block';
                 document.getElementById('lobbyView').style.display = 'none';
+                document.getElementById('gameView').style.display = 'none'; 
+
             };
 
             ws.onerror = (err) => {

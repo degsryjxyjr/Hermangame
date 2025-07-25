@@ -16,6 +16,28 @@ button { padding: 8px 15px; margin: 5px; cursor: pointer; }
     display: none; 
 }
 
+/* Better close button */
+#closeInventory {
+    background: gold;
+    color: black;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-size: 18px; /* Slightly larger for clarity */
+    font-weight: bold;
+    margin-left: auto;
+    cursor: pointer; /* Ensure it looks clickable */
+    min-width: 40px; /* Give it a minimum width */
+    min-height: 40px; /* Give it a minimum height */
+    display: flex; /* Use flexbox for perfect centering */
+    align-items: center; /* Center vertically */
+    justify-content: center; /* Center horizontally */
+    /* Ensure the font used supports the × symbol */
+    font-family: Arial, Helvetica, sans-serif; 
+}
+
+
+
 /* Make FAB (inventory button) more touch-friendly */
 .fab {
     position: fixed;
