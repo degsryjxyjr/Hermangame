@@ -6,7 +6,7 @@ using System.Linq; // For finding abilities/items if needed
 /// <summary>
 /// Represents an active enemy instance in the game world, implementing core interfaces.
 /// </summary>
-public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable // Add IAbilityEffect target if needed
+public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActionBudget // Add IAbilityEffect target if needed
 {
     [Header("Configuration")]
     [SerializeField] public EnemyDefinition _enemyDefinition;
@@ -20,7 +20,19 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable // Add
     public int Attack { get; private set; }
     public int Defense { get; private set; }
     public int Magic { get; private set; }
+    // --- : Action Budget Fields ---
+    // Base action counts (from EnemyDefinition or calculated)
+    public int BaseMainActions { get; private set; } = 1; // Default or from definition
+    public int BaseBonusActions { get; private set; } = 1; // Default or from definition
 
+    // Current turn's action counts (can be modified by effects)
+    public int MainActions { get; private set; } = 1;
+    public int BonusActions { get; private set; } = 1;
+
+    // Remaining actions for the current turn
+    public int MainActionsRemaining { get; private set; } = 1;
+    public int BonusActionsRemaining { get; private set; } = 1;
+    // --- END Action Budget Fields ---
     
     // Reference to the list of abilities this enemy instance can use
     public List<AbilityDefinition> UnlockedAbilities { get; private set; } = new List<AbilityDefinition>();
@@ -65,7 +77,7 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable // Add
     /// <summary>
     /// Initializes the enemy's stats and abilities based on its definition and level.
     /// </summary>
-    private void InitializeFromDefinition(int level)
+    public void InitializeFromDefinition(int level)
     {
         // Calculate stats based on definition and level
         MaxHealth = Mathf.FloorToInt(_enemyDefinition.baseHealth * _enemyDefinition.healthGrowth.Evaluate(level));
@@ -73,6 +85,15 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable // Add
         Attack = Mathf.FloorToInt(_enemyDefinition.baseAttack * _enemyDefinition.attackGrowth.Evaluate(level));
         Defense = Mathf.FloorToInt(_enemyDefinition.baseDefense * _enemyDefinition.defenseGrowth.Evaluate(level));
         Magic = Mathf.FloorToInt(_enemyDefinition.baseMagic * _enemyDefinition.magicGrowth.Evaluate(level));
+
+        // --- Initialize Base Action Counts ---
+        // Deriving from EnemyDefinition or using defaults
+        BaseMainActions = _enemyDefinition?.baseMainActions ?? 1; 
+        BaseBonusActions = _enemyDefinition?.baseBonusActions ?? 1; 
+        // Reset current budget to base values
+        ResetActionBudgetForNewTurn();
+        // --- END Base Action Counts ---
+
 
         // Copy innate abilities from the definition
         UnlockedAbilities = new List<AbilityDefinition>(_enemyDefinition.innateAbilities);
@@ -250,6 +271,65 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable // Add
         return actualHeal;
     }
     // --- End Implementation of IHealable ---
+
+
+    // --- NEW: IActionBudget Implementation ---
+    public bool ConsumeMainAction()
+    {
+        if (MainActionsRemaining > 0)
+        {
+            MainActionsRemaining--;
+            Debug.Log($"Enemy {GetEntityName()} consumed a main action. Remaining: {MainActionsRemaining}/{MainActions}");
+            return true;
+        }
+        Debug.Log($"Enemy {GetEntityName()} tried to consume a main action, but none are left.");
+        return false;
+    }
+
+    public bool ConsumeBonusAction()
+    {
+        if (BonusActionsRemaining > 0)
+        {
+            BonusActionsRemaining--;
+            Debug.Log($"Enemy {GetEntityName()} consumed a bonus action. Remaining: {BonusActionsRemaining}/{BonusActions}");
+            return true;
+        }
+        Debug.Log($"Enemy {GetEntityName()} tried to consume a bonus action, but none are left.");
+        return false;
+    }
+
+    public void ModifyCurrentActionBudget(int mainChange, int bonusChange)
+    {
+        // Modify the current turn's total available actions
+        MainActions = Mathf.Max(0, MainActions + mainChange);
+        BonusActions = Mathf.Max(0, BonusActions + bonusChange);
+
+        // Adjust remaining actions, ensuring they don't exceed the new totals
+        MainActionsRemaining = Mathf.Min(MainActionsRemaining + mainChange, MainActions);
+        BonusActionsRemaining = Mathf.Min(BonusActionsRemaining + bonusChange, BonusActions);
+
+        // Ensure remaining actions don't go below zero
+        MainActionsRemaining = Mathf.Max(0, MainActionsRemaining);
+        BonusActionsRemaining = Mathf.Max(0, BonusActionsRemaining);
+
+        Debug.Log($"Enemy {GetEntityName()}'s action budget modified. Main: {MainActions} ({MainActionsRemaining} rem), Bonus: {BonusActions} ({BonusActionsRemaining} rem)");
+        // TODO: Potentially handle effect duration/logic if needed
+    }
+
+    public void ResetActionBudgetForNewTurn()
+    {
+        // Reset to base values at the start of the turn
+        // Base actions could come from EnemyDefinition if you add fields there
+        // For now, using simple defaults or potentially derived from level/definition
+        // Example: BaseMainActions = _enemyDefinition?.baseMainActions ?? 1;
+        MainActions = BaseMainActions;
+        BonusActions = BaseBonusActions;
+        MainActionsRemaining = MainActions;
+        BonusActionsRemaining = BonusActions;
+        Debug.Log($"Enemy {GetEntityName()}'s action budget reset for new turn. Main: {MainActions}, Bonus: {BonusActions}");
+    }
+    // --- END NEW: IActionBudget Implementation ---
+
 
 
     // --- Helper Methods for Combat/AI ---

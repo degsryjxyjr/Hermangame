@@ -17,6 +17,12 @@ public class EnemyDefinition : ScriptableObject
     public int baseDefense;
     public int baseMagic; // For magic defense or magic attack if needed
 
+
+    [Header("Action Budget")]
+    public int baseMainActions = 1;
+    public int baseBonusActions = 1;
+
+
     [Header("Scaling")]
     // If you want enemies to get stronger with level (for future encounters)
     // You can use AnimationCurves or simple multipliers like player classes

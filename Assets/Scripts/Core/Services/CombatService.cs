@@ -454,6 +454,57 @@ public class CombatService : MonoBehaviour
         
         Debug.Log($"CombatService: Received combat action from player {playerId}. Action Data: {JsonUtility.ToJson(actionData)}");
 
+        // --- Determine Action Type for Limiting (same logic) ---
+        bool isMainAction = false;
+        bool isBonusAction = false;
+        string actionType = "";
+        if (actionData.TryGetValue("type", out var typeObj))
+        {
+            actionType = typeObj.ToString();
+            switch (actionType)
+            {
+                case "use_ability":
+                    // For now assume all abilities are mainActions. 
+                    // TODO retrive actionType from the abilityDefinition
+                    isMainAction = true;
+                    break;
+                case "melee_attack":
+                    isMainAction = true;
+                    break;
+                case "use_item":
+                    isBonusAction = true;
+                    break;
+                default:
+                    Debug.LogWarning($"CombatService: Unknown action type '{actionType}' for action limiting. Assuming Main Action.");
+                    isMainAction = true;
+                    break;
+            }
+        }
+        // --- END Determine Action Type ---
+
+        // --- Check Action Availability using EncounterManager ---
+        bool actionAllowed = true;
+        if (isMainAction && !_encounterManager.IsMainActionAvailable())
+        {
+            actionAllowed = false;
+            Debug.LogWarning($"CombatService: Player {playerId} tried to use main action '{actionType}', but main action already used this turn.");
+            // TODO: Send specific error to client
+        }
+        else if (isBonusAction && !_encounterManager.IsBonusActionAvailable())
+        {
+            actionAllowed = false;
+            Debug.LogWarning($"CombatService: Player {playerId} tried to use bonus action '{actionType}', but bonus action already used this turn.");
+            // TODO: Send specific error to client
+        }
+        // --- END Check Action Availability ---
+
+        if (!actionAllowed)
+        {
+            return; // Do not process the action further
+        }
+
+
+
         // 2. Parse action
         if (actionData.TryGetValue("type", out var typeObj))
         {

@@ -24,7 +24,6 @@ public class EncounterManager : MonoBehaviour
 
 
     private EncounterState _currentState = EncounterState.NotStarted;
-    public EncounterState CurrentState => _currentState;
 
     // --- Participants ---
     // Use Lists to maintain order, Dictionaries for fast lookup by ID/Instance
@@ -39,7 +38,7 @@ public class EncounterManager : MonoBehaviour
     // You can expand this to a more complex initiative system later.
     private List<object> _turnOrder = new List<object>(); // Can hold PlayerConnection or EnemyEntity
     private int _currentTurnIndex = -1; // -1 means no turn active yet
-    public object CurrentTurnEntity { get; private set; } = null; // Convenience property
+    public object _currentTurnEntity = null; // This will now be IActionBudget
 
     // --- Events ---
     // These can be used to notify the CombatService or UI about state changes.
@@ -49,6 +48,17 @@ public class EncounterManager : MonoBehaviour
     public System.Action<PlayerConnection> OnPlayerAdded;
     public System.Action<EnemyEntity> OnEnemyAdded;
     public System.Action<EnemyEntity> OnEnemyDefeated; // Could pass loot drops here
+
+    // Properties
+    public EncounterState CurrentState => _currentState;
+    public object CurrentTurnEntity => _currentTurnEntity;
+    public List<PlayerConnection> GetActivePlayers() => new List<PlayerConnection>(_activePlayers);
+    public List<EnemyEntity> GetActiveEnemies() => new List<EnemyEntity>(_activeEnemies);
+
+    public List<object> GetTurnOrder() => new List<object>(_turnOrder); // Return copy to prevent external modification
+    public int GetActivePlayerCount() => _activePlayers.Count;
+    public int GetActiveEnemyCount() => _activeEnemies.Count;
+
 
     // --- Initialization ---
     /// <summary>
@@ -61,7 +71,6 @@ public class EncounterManager : MonoBehaviour
             Debug.LogWarning("Cannot start encounter, state is not NotStarted.");
             return;
         }
-
         Debug.Log("EncounterManager: Starting new encounter.");
         _currentState = EncounterState.Active;
 
@@ -75,33 +84,24 @@ public class EncounterManager : MonoBehaviour
         }
 
         // 2. Spawn and Add Enemies
-        // This assumes enemies are spawned in the combat scene at predetermined locations
-        // or that their positions are defined by the encounter data.
-        // For prototype, we'll just instantiate them at the manager's position.
-        // A more robust system might involve spawn points or an encounter definition object.
-        if (enemyDefinitions != null)
+        foreach (var enemyDef in enemyDefinitions)
         {
-            foreach (var enemyDef in enemyDefinitions)
+            if (enemyDef != null)
             {
-                if (enemyDef != null)
-                {
-                    // TODO: Determine spawn location, level, etc.
-                    SpawnEnemy(enemyDef, Vector3.zero, 1); // Placeholder position and level
-                }
+                SpawnEnemy(enemyDef);
             }
         }
 
-        // 3. Determine Initial Turn Order
-        // Placeholder: Players first, then enemies, all in order they were added.
-        // A real system would use initiative rolls or speed stats.
+        // 3. Build Turn Order (Initial)
+        // A simple, fixed order for now. Players first, then enemies.
         BuildInitialTurnOrder();
 
-        // 4. Start the first turn
+        // 4. Start the first turn (which will reset the first entity's action budget)
         AdvanceTurn();
 
         // 5. Notify listeners
         OnEncounterStarted?.Invoke();
-        Debug.Log($"EncounterManager: Encounter started with {_activePlayers.Count} players and {_activeEnemies.Count} enemies. Turn order set.");
+        Debug.Log($"EncounterManager: Encounter started with {_activePlayers.Count} players and {_activeEnemies.Count} enemies.");
     }
 
     private void AddPlayer(PlayerConnection player)
@@ -145,14 +145,9 @@ public class EncounterManager : MonoBehaviour
         // If EnemyEntity has a serialized field for EnemyDefinition, you might set it here or ensure it's pre-configured on the prefab.
         // For now, let's assume it reads the definition from its serialized field or Awake handles it if not set.
         // If you need to pass data explicitly:
-        // enemyEntity.Initialize(enemyDef, level); // You'd need to add such a method to EnemyEntity
+        enemyEntity.InitializeFromDefinition(level);
         
-        // Ensure EnemyEntity has its definition set. If not, set it.
-        if (enemyEntity._enemyDefinition == null) // Assuming you add a public property/field EnemyDefinition to EnemyEntity
-        {
-             enemyEntity.SetEnemyDefinition(enemyDef); // Add this method to EnemyEntity
-             // Or directly if it's a public field: enemyEntity._enemyDefinition = enemyDef;
-        }
+
         // EnemyEntity.Awake should then initialize stats etc. based on the definition.
         // If level needs to be passed explicitly and EnemyEntity.Awake runs before we can set it,
         // you might need to call an Initialize method after setting the definition.
@@ -169,93 +164,127 @@ public class EncounterManager : MonoBehaviour
     private void BuildInitialTurnOrder()
     {
         _turnOrder.Clear();
-        // Simple order: All players, then all enemies.
-        // You can make this more sophisticated later (e.g., initiative based on speed).
-        foreach (var player in _activePlayers)
-        {
-            _turnOrder.Add(player);
-        }
-        foreach (var enemy in _activeEnemies)
-        {
-            _turnOrder.Add(enemy);
-        }
+        // Simple example: Add all players, then all enemies
+        _turnOrder.AddRange(_activePlayers.Cast<object>());
+        _turnOrder.AddRange(_activeEnemies.Cast<object>());
+
+        // For a more complex system, you'd sort based on initiative/speed here.
+        // Example (requires speed stat and sorting logic):
+        // _turnOrder = _turnOrder.OrderBy(entity => {
+        //     if (entity is IEntity e) return -e.GetSpeed(); // Assuming higher speed goes first
+        //     return 0;
+        // }).ToList();
+
+        _currentTurnIndex = -1; // Reset index
+        _currentTurnEntity = null; // Reset current entity
         Debug.Log($"EncounterManager: Built initial turn order with {_turnOrder.Count} entities.");
     }
 
     // --- Turn Management ---
     /// <summary>
-    /// Advances the turn to the next active entity in the turn order.
+    /// Advances the turn to the next entity in the turn order.
+    /// Automatically handles ending the encounter if win/loss conditions are met.
     /// </summary>
     public void AdvanceTurn()
     {
+        // --- NEW: No specific reset needed here for the *previous* entity ---
+        // The IActionBudget.ResetActionBudgetForNewTurn() will handle the new entity's state.
+        // --- END NEW ---
+
         if (_currentState != EncounterState.Active)
         {
             Debug.LogWarning("Cannot advance turn, encounter is not active.");
             return;
         }
 
-        if (_turnOrder.Count == 0)
+        // Check win/loss before advancing
+        if (CheckEncounterEndConditions())
         {
-            Debug.LogError("Cannot advance turn, turn order is empty.");
+            // Encounter ended, don't proceed with turn advancement
             return;
         }
 
-        // Find the next *alive* entity in the turn order.
+        // Find the next alive entity in the turn order
+        int startIndex = _currentTurnIndex;
         int attempts = 0;
-        int maxAttempts = _turnOrder.Count; // Prevent infinite loop if all are dead
+        int maxAttempts = _turnOrder.Count;
+
         do
         {
             _currentTurnIndex = (_currentTurnIndex + 1) % _turnOrder.Count;
-            CurrentTurnEntity = _turnOrder[_currentTurnIndex];
+            _currentTurnEntity = _turnOrder[_currentTurnIndex];
             attempts++;
 
-            // Check if the current entity is alive
+            // Check if the entity is alive
             bool isAlive = false;
-            if (CurrentTurnEntity is PlayerConnection player)
+            if (_currentTurnEntity is IEntity entity)
             {
-                isAlive = player.IsAlive();
+                isAlive = entity.IsAlive();
             }
-            else if (CurrentTurnEntity is EnemyEntity enemy)
+            else if (_currentTurnEntity is PlayerConnection player)
             {
-                isAlive = enemy.IsAlive();
+                isAlive = player.IsAlive(); // Assuming PlayerConnection has IsAlive()
             }
 
             if (isAlive)
             {
-                break; // Found an alive entity, use this turn
+                break; // Found an alive entity, break the loop
             }
             else
             {
-                Debug.Log($"EncounterManager: Skipping dead entity {_currentTurnIndex} in turn order.");
-                CurrentTurnEntity = null; // Clear for this dead turn
+                _currentTurnEntity = null; // Mark as no valid turn entity found yet for this iteration
             }
 
-        } while (attempts < maxAttempts);
+        } while (_currentTurnIndex != startIndex && attempts < maxAttempts);
 
-        if (CurrentTurnEntity == null)
+        // Final check if we found a valid, alive entity
+        if (_currentTurnEntity == null || !IsCurrentTurnEntityAlive())
         {
-            Debug.Log("EncounterManager: No alive entities found in turn order. Checking win/loss conditions.");
-            CheckEncounterEndConditions();
+            Debug.LogError("EncounterManager: Could not find a valid, alive entity for the next turn after cycling through the turn order!");
+            // Handle this error state, maybe end encounter in a draw or error?
+            _currentState = EncounterState.Defeat; // Or NotStarted? Needs definition.
+            EndEncounter();
             return; // Don't start a turn if the encounter ended
         }
 
         // A valid, alive entity has the turn
+
+        // --- NEW: Reset Action State for the *New* Current Entity ---
+        if (_currentTurnEntity is IActionBudget newActionEntity)
+        {
+            newActionEntity.ResetActionBudgetForNewTurn();
+            Debug.Log($"EncounterManager: Turn advanced. Current turn: {GetCurrentTurnEntityName()} (Index: {_currentTurnIndex}). Action budget reset.");
+        }
+        else
+        {
+             Debug.LogWarning($"EncounterManager: Turn advanced. Current turn: {GetCurrentTurnEntityName()} (Index: {_currentTurnIndex}). This entity does not implement IActionBudget.");
+        }
+        // --- END NEW ---
+
         OnTurnStarted?.Invoke(CurrentTurnEntity);
         Debug.Log($"EncounterManager: Turn advanced. Current turn: {GetCurrentTurnEntityName()} (Index: {_currentTurnIndex})");
-        
+
         // TODO: Send message to all clients about whose turn it is.
         // This might involve sending the entire turn order or just the current entity ID.
     }
 
-    private string GetCurrentTurnEntityName()
+    private bool IsCurrentTurnEntityAlive()
     {
-        if (CurrentTurnEntity is IEntity entity)
+        if (_currentTurnEntity is IEntity entity) return entity.IsAlive();
+        if (_currentTurnEntity is PlayerConnection player) return player.IsAlive();
+        return false; // Shouldn't happen if turn order is managed correctly
+    }
+    // --- END Modified: AdvanceTurn Logic ---
+
+    private string Get_currentTurnEntityName()
+    {
+        if (_currentTurnEntity is IEntity entity)
         {
             return entity.GetEntityName();
         }
-        else if (CurrentTurnEntity != null)
+        else if (_currentTurnEntity != null)
         {
-            return CurrentTurnEntity.ToString();
+            return _currentTurnEntity.ToString();
         }
         return "None";
     }
@@ -282,7 +311,7 @@ public class EncounterManager : MonoBehaviour
         // If the defeated enemy was the current turn holder, advance the turn immediately?
         // Or let the normal AdvanceTurn logic handle it on the next cycle?
         // Let's let AdvanceTurn handle it to keep logic centralized there.
-        // if (CurrentTurnEntity == enemy)
+        // if (_currentTurnEntity == enemy)
         // {
         //     Debug.Log("Defeated enemy was the current turn holder. Advancing turn...");
         //     AdvanceTurn(); // This might cause issues if called mid-action. Better handled by CombatService after action resolves.
@@ -298,42 +327,39 @@ public class EncounterManager : MonoBehaviour
         CheckEncounterEndConditions();
     }
 
-    private void CheckEncounterEndConditions()
+    private bool CheckEncounterEndConditions()
     {
-        if (_currentState != EncounterState.Active) return; // Already ended
-
-        // Check for Player Victory (All enemies defeated)
-        if (_activeEnemies.Count == 0)
-        {
-            Debug.Log("EncounterManager: All enemies defeated. Player victory!");
-            _currentState = EncounterState.Victory;
-            EndEncounter();
-            return;
-        }
-
-        // Check for Player Defeat (All players defeated)
-        bool allPlayersDefeated = true;
-        foreach (var player in _activePlayers)
-        {
-            if (player.IsAlive())
-            {
-                allPlayersDefeated = false;
-                break;
-            }
-        }
-        if (allPlayersDefeated)
+        // Check if all players are dead
+        if (_activePlayers.All(p => !p.IsAlive()))
         {
             Debug.Log("EncounterManager: All players defeated. Player defeat!");
             _currentState = EncounterState.Defeat;
             EndEncounter();
-            return;
+            return true;
+        }
+        // Check if all enemies are dead
+        if (_activeEnemies.All(e => !e.IsAlive()))
+        {
+            Debug.Log("EncounterManager: All enemies defeated. Player victory!");
+            _currentState = EncounterState.Victory;
+            EndEncounter();
+            return true;
         }
 
         // If neither, the encounter continues.
         Debug.Log("EncounterManager: Encounter continues. Players: " +
                   $"{_activePlayers.Count(p => p.IsAlive())}/{_activePlayers.Count}, " +
                   $"Enemies: {_activeEnemies.Count}");
+        return false;
     }
+
+    public string GetCurrentTurnEntityName()
+    {
+        if (_currentTurnEntity is IEntity entity) return entity.GetEntityName();
+        if (_currentTurnEntity is PlayerConnection player) return player.LobbyData?.Name ?? player.NetworkId;
+        return "Unknown Entity";
+    }
+
 
     private void EndEncounter()
     {
@@ -393,18 +419,109 @@ public class EncounterManager : MonoBehaviour
                 return damageable;
             }
         }
+        // Example: Resolve by InstanceID string for enemies
+        if (int.TryParse(targetSpecifier, out int instanceId) && _activeEnemiesDict.TryGetValue(instanceId, out EnemyEntity enemyTarget))
+        {
+            return enemyTarget;
+        }
         // Add logic for "ally_1", "all_enemies", etc. as needed.
 
         Debug.Log($"EncounterManager: Could not resolve target specifier '{targetSpecifier}'");
         return null;
     }
 
-    // --- Getters for Active Entities ---
-    public List<PlayerConnection> GetActivePlayers() => new List<PlayerConnection>(_activePlayers);
-    public List<EnemyEntity> GetActiveEnemies() => new List<EnemyEntity>(_activeEnemies);
-    public List<object> GetTurnOrder() => new List<object>(_turnOrder); // Return copy to prevent external modification
-    public int GetActivePlayerCount() => _activePlayers.Count;
-    public int GetActiveEnemyCount() => _activeEnemies.Count;
+
+
+
+    // --- Methods to Record Actions (via Interface) ---
+    /// <summary>
+    /// Records that the main action has been used by the current entity.
+    /// Should be called by CombatService after a successful main action.
+    /// </summary>
+    public void RecordMainActionUsed()
+    {
+        if (_currentTurnEntity is IActionBudget actionEntity)
+        {
+            bool consumed = actionEntity.ConsumeMainAction();
+            if (consumed)
+            {
+                Debug.Log("EncounterManager: Main action recorded as used for current entity.");
+            }
+            else
+            {
+                Debug.LogWarning("EncounterManager: RecordMainActionUsed called, but current entity has no main actions left.");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("EncounterManager: RecordMainActionUsed called, but current turn entity does not implement IActionBudget.");
+        }
+    }
+
+    /// <summary>
+    /// Records that the bonus action has been used by the current entity.
+    /// Should be called by CombatService after a successful bonus action.
+    /// </summary>
+    public void RecordBonusActionUsed()
+    {
+        if (_currentTurnEntity is IActionBudget actionEntity)
+        {
+            bool consumed = actionEntity.ConsumeBonusAction();
+             if (consumed)
+            {
+                Debug.Log("EncounterManager: Bonus action recorded as used for current entity.");
+            }
+            else
+            {
+                 Debug.LogWarning("EncounterManager: RecordBonusActionUsed called, but current entity has no bonus actions left.");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("EncounterManager: RecordBonusActionUsed called, but current turn entity does not implement IActionBudget.");
+        }
+    }
+
+    /// <summary>
+    /// Checks if the current entity has used all their available actions.
+    /// Used by CombatService to determine if the entity's turn should end automatically.
+    /// </summary>
+    /// <returns>True if both main and bonus actions are exhausted for the current entity (if it uses actions).</returns>
+    public bool AreCurrentEntityActionsExhausted()
+    {
+        if (_currentTurnEntity is IActionBudget actionEntity)
+        {
+            // Check if both main and bonus actions are exhausted
+            return actionEntity.MainActionsRemaining <= 0 && actionEntity.BonusActionsRemaining <= 0;
+        }
+        // If the entity doesn't manage actions, it doesn't consume turns in this way.
+        // Returning false means the turn won't auto-advance due to action exhaustion for this entity.
+        return false;
+    }
+    // --- END: Methods to Record Actions ---
+
+    // --- Helper Methods to Check Action Availability ---
+    // These query the current entity's IActionBudget interface
+    public bool IsMainActionAvailable()
+    {
+        if (__currentTurnEntity is IActionBudget actionEntity)
+        {
+            return actionEntity.MainActionsRemaining > 0;
+        }
+        return false; // Not an entity with an action budget, or no current entity
+    }
+
+    public bool IsBonusActionAvailable()
+    {
+        if (__currentTurnEntity is IActionBudget actionEntity)
+        {
+            return actionEntity.BonusActionsRemaining > 0;
+        }
+        return false;
+    }
+    // --- END Helper Methods ---
+
+
 
     // --- Cleanup (Optional) ---
     private void OnDestroy()
@@ -415,6 +532,6 @@ public class EncounterManager : MonoBehaviour
         _activeEnemies.Clear();
         _activeEnemiesDict.Clear();
         _turnOrder.Clear();
-        CurrentTurnEntity = null;
+        _currentTurnEntity = null;
     }
 }

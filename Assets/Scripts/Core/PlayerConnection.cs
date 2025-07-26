@@ -13,7 +13,7 @@ using System.Collections.Generic;
 /// Represents a connected player, holding lobby data, runtime game state,
 /// and implementing core entity behaviors like taking damage and receiving healing.
 /// </summary>
-public class PlayerConnection : IEntity, IDamageable, IHealable
+public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
 {
     // --- Core Connection Fields ---
     public string NetworkId { get; }
@@ -27,6 +27,20 @@ public class PlayerConnection : IEntity, IDamageable, IHealable
     public PlayerClassDefinition ClassDefinition { get; set; }
     public int Level { get; set; } = 1;
     public int Experience { get; set; } = 0;
+
+    // --- Action Budget Fields ---
+    // Base action counts (from ClassDefinition)
+    public int BaseMainActions { get; private set; } = 1; // Default
+    public int BaseBonusActions { get; private set; } = 1; // Default
+
+    // Current turn's action counts (can be modified by effects)
+    public int MainActions { get; private set; } = 1;
+    public int BonusActions { get; private set; } = 1;
+
+    // Remaining actions for the current turn
+    public int MainActionsRemaining { get; private set; } = 1;
+    public int BonusActionsRemaining { get; private set; } = 1;
+    // --- END Action Budget Fields ---
 
     // --- Flattened Runtime Stats (formerly in PlayerGameData.RuntimeStats) ---
     public int CurrentHealth { get; set; }
@@ -71,6 +85,11 @@ public class PlayerConnection : IEntity, IDamageable, IHealable
             Attack = 10;
             Defense = 5;
             Magic = 10;
+            // ---  Default Action Budgets ---
+            BaseMainActions = 1;
+            BaseBonusActions = 1;
+            ResetActionBudgetForNewTurn();
+            // --- END  ---
             return;
         }
 
@@ -82,8 +101,16 @@ public class PlayerConnection : IEntity, IDamageable, IHealable
         Defense = Mathf.FloorToInt(ClassDefinition.baseDefense * (ClassDefinition.defenseGrowth?.Evaluate(Level) ?? 1.0f));
         Magic = Mathf.FloorToInt(ClassDefinition.baseMagic * (ClassDefinition.magicGrowth?.Evaluate(Level) ?? 1.0f));
 
+        // --- Initialize Base Action Counts ---
+        BaseMainActions = ClassDefinition.baseMainActions;
+        BaseBonusActions = ClassDefinition.baseBonusActions;
+        // Reset current budget to base values
+        ResetActionBudgetForNewTurn();
+        // --- END ---
+
+
         Debug.Log($"Initialized stats for {LobbyData?.Name ?? "Unknown Player"} (Level {Level} {ClassDefinition.className}): " +
-                  $"HP {CurrentHealth}/{MaxHealth}, ATK {Attack}, DEF {Defense}, MAG {Magic}");
+                  $"HP {CurrentHealth}/{MaxHealth}, ATK {Attack}, DEF {Defense}, MAG {Magic}, MainActions {BaseMainActions}, BonusActions {BaseBonusActions}");
 
         // sending player name, class, level and xp etc
         SendStatsUpdateToClient();
@@ -232,41 +259,41 @@ public class PlayerConnection : IEntity, IDamageable, IHealable
             Debug.Log($"Applied basic stat bonuses from {equippedItem.displayName} (no custom effect scripts).");
         }
         // Note: Individual effect scripts should handle sending stats_update if needed.
-        
-            // 2. Grant Linked Abilities (with Reference Counting)
-            if (equippedItem.linkedAbilities != null)
+
+        // 2. Grant Linked Abilities (with Reference Counting)
+        if (equippedItem.linkedAbilities != null)
+        {
+            foreach (var ability in equippedItem.linkedAbilities)
             {
-                foreach (var ability in equippedItem.linkedAbilities)
+                if (ability != null)
                 {
-                    if (ability != null)
+                    // Initialize count to 0 if not present
+                    if (!_itemGrantedAbilityCounts.ContainsKey(ability))
                     {
-                        // Initialize count to 0 if not present
-                        if (!_itemGrantedAbilityCounts.ContainsKey(ability))
-                        {
-                            _itemGrantedAbilityCounts[ability] = 0;
-                        }
-
-                        // Increment count
-                        _itemGrantedAbilityCounts[ability]++;
-
-                        // Only add to UnlockedAbilities if:
-                        // 1. This is the first item granting it (count was 0, now 1)
-                        // AND 2. It's not already in UnlockedAbilities
-                        if (_itemGrantedAbilityCounts[ability] == 1 && 
-                            !this.UnlockedAbilities.Contains(ability))
-                        {
-                            this.UnlockedAbilities.Add(ability);
-                            Debug.Log($"Granted ability '{ability.abilityName}' from item '{equippedItem.displayName}' to player '{this.LobbyData.Name}' (RefCount: {_itemGrantedAbilityCounts[ability]})");
-                        }
-                        else
-                        {
-                            Debug.Log($"Player '{this.LobbyData.Name}' already knows ability '{ability.abilityName}'. Incremented item-grant RefCount to {_itemGrantedAbilityCounts[ability]} from item '{equippedItem.displayName}'");
-                        }
-                        // --- End Reference Counting Logic ---
+                        _itemGrantedAbilityCounts[ability] = 0;
                     }
+
+                    // Increment count
+                    _itemGrantedAbilityCounts[ability]++;
+
+                    // Only add to UnlockedAbilities if:
+                    // 1. This is the first item granting it (count was 0, now 1)
+                    // AND 2. It's not already in UnlockedAbilities
+                    if (_itemGrantedAbilityCounts[ability] == 1 &&
+                        !this.UnlockedAbilities.Contains(ability))
+                    {
+                        this.UnlockedAbilities.Add(ability);
+                        Debug.Log($"Granted ability '{ability.abilityName}' from item '{equippedItem.displayName}' to player '{this.LobbyData.Name}' (RefCount: {_itemGrantedAbilityCounts[ability]})");
+                    }
+                    else
+                    {
+                        Debug.Log($"Player '{this.LobbyData.Name}' already knows ability '{ability.abilityName}'. Incremented item-grant RefCount to {_itemGrantedAbilityCounts[ability]} from item '{equippedItem.displayName}'");
+                    }
+                    // --- End Reference Counting Logic ---
                 }
             }
-            // --- End Grant Linked Abilities ---
+        }
+        // --- End Grant Linked Abilities ---
     }
 
     public void OnUnequipItem(ItemDefinition unequippedItem)
@@ -316,7 +343,7 @@ public class PlayerConnection : IEntity, IDamageable, IHealable
                     if (_itemGrantedAbilityCounts[ability] <= 0)
                     {
                         _itemGrantedAbilityCounts.Remove(ability);
-                        
+
                         // Only remove if the ability is marked as item-granted
                         // (This is the key fix - we need to track permanent abilities separately)
                         if (ShouldRemoveAbility(ability))
@@ -334,7 +361,7 @@ public class PlayerConnection : IEntity, IDamageable, IHealable
                 }
             }
         }
-            // --- End Revoke Linked Abilities ---
+        // --- End Revoke Linked Abilities ---
 
     }
 
@@ -345,14 +372,14 @@ public class PlayerConnection : IEntity, IDamageable, IHealable
     private bool ShouldRemoveAbility(AbilityDefinition ability)
     {
         // If the ability is part of the class's permanent abilities, don't remove it
-        if (this.ClassDefinition != null && 
+        if (this.ClassDefinition != null &&
             this.ClassDefinition.startingAbilities.Contains(ability))
         {
             return false;
         }
-        
+
         // Add other checks here if you have other ways to permanently grant abilities
-        
+
         return true;
     }
 
@@ -366,41 +393,97 @@ public class PlayerConnection : IEntity, IDamageable, IHealable
         SendStatsUpdateToClient();
     }
 
-        private void RemoveBasicStatBonuses(ItemDefinition item)
-        {
-            this.Attack -= item.attackModifier;
-            this.Defense -= item.defenseModifier;
-            this.Magic -= item.magicModifier;
-            // this.MaxHealth -= item.healthModifier; // Subtract if used
-            this.Attack = Mathf.Max(0, this.Attack);
-            this.Defense = Mathf.Max(0, this.Defense);
-            this.Magic = Mathf.Max(0, this.Magic);
-            // this.MaxHealth = Mathf.Max(1, this.MaxHealth); // Ensure minimum
-            // this.CurrentHealth = Mathf.Min(this.CurrentHealth, this.MaxHealth);
-            Debug.Log($"Removed basic bonuses: -{item.attackModifier} ATK, -{item.defenseModifier} DEF, -{item.magicModifier} MAG");
-            SendStatsUpdateToClient();
-        }
+    private void RemoveBasicStatBonuses(ItemDefinition item)
+    {
+        this.Attack -= item.attackModifier;
+        this.Defense -= item.defenseModifier;
+        this.Magic -= item.magicModifier;
+        // this.MaxHealth -= item.healthModifier; // Subtract if used
+        this.Attack = Mathf.Max(0, this.Attack);
+        this.Defense = Mathf.Max(0, this.Defense);
+        this.Magic = Mathf.Max(0, this.Magic);
+        // this.MaxHealth = Mathf.Max(1, this.MaxHealth); // Ensure minimum
+        // this.CurrentHealth = Mathf.Min(this.CurrentHealth, this.MaxHealth);
+        Debug.Log($"Removed basic bonuses: -{item.attackModifier} ATK, -{item.defenseModifier} DEF, -{item.magicModifier} MAG");
+        SendStatsUpdateToClient();
+    }
 
-        /// <summary>
-        /// Sends the player's current stats to their client.
-        /// </summary>
-        public void SendStatsUpdateToClient()
+    /// <summary>
+    /// Sends the player's current stats to their client.
+    /// </summary>
+    public void SendStatsUpdateToClient()
+    {
+        GameServer.Instance.SendToPlayer(this.NetworkId, new
         {
-            GameServer.Instance.SendToPlayer(this.NetworkId, new
-            {
-                type = "stats_update",
-                role = this.ClassDefinition.className, //role cause class is used by C
-                level = this.Level,
-                experience = this.Experience,
-                currentHealth = this.CurrentHealth,
-                maxHealth = this.MaxHealth,
-                attack = this.Attack,
-                defense = this.Defense,
-                magic = this.Magic
-                // Add other stats as needed
-            });
-        }
+            type = "stats_update",
+            role = this.ClassDefinition.className, //role cause class is used by C
+            level = this.Level,
+            experience = this.Experience,
+            currentHealth = this.CurrentHealth,
+            maxHealth = this.MaxHealth,
+            attack = this.Attack,
+            defense = this.Defense,
+            magic = this.Magic
+            // Add other stats as needed
+        });
+    }
     // --- End Implementation of IEquipmentEffect ---
+
+    // --- IActionBudget Implementation ---
+    public bool ConsumeMainAction()
+    {
+        if (MainActionsRemaining > 0)
+        {
+            MainActionsRemaining--;
+            Debug.Log($"Player {LobbyData?.Name} consumed a main action. Remaining: {MainActionsRemaining}/{MainActions}");
+            return true;
+        }
+        Debug.Log($"Player {LobbyData?.Name} tried to consume a main action, but none are left.");
+        return false;
+    }
+
+    public bool ConsumeBonusAction()
+    {
+        if (BonusActionsRemaining > 0)
+        {
+            BonusActionsRemaining--;
+            Debug.Log($"Player {LobbyData?.Name} consumed a bonus action. Remaining: {BonusActionsRemaining}/{BonusActions}");
+            return true;
+        }
+        Debug.Log($"Player {LobbyData?.Name} tried to consume a bonus action, but none are left.");
+        return false;
+    }
+
+    public void ModifyCurrentActionBudget(int mainChange, int bonusChange)
+    {
+        // Modify the current turn's total available actions
+        MainActions = Mathf.Max(0, MainActions + mainChange);
+        BonusActions = Mathf.Max(0, BonusActions + bonusChange);
+
+        // Adjust remaining actions, ensuring they don't exceed the new totals
+        MainActionsRemaining = Mathf.Min(MainActionsRemaining + mainChange, MainActions);
+        BonusActionsRemaining = Mathf.Min(BonusActionsRemaining + bonusChange, BonusActions);
+
+        // Ensure remaining actions don't go below zero
+        MainActionsRemaining = Mathf.Max(0, MainActionsRemaining);
+        BonusActionsRemaining = Mathf.Max(0, BonusActionsRemaining);
+
+        Debug.Log($"Player {LobbyData?.Name}'s action budget modified. Main: {MainActions} ({MainActionsRemaining} rem), Bonus: {BonusActions} ({BonusActionsRemaining} rem)");
+        // TODO: Potentially notify client about action budget change
+    }
+
+    public void ResetActionBudgetForNewTurn()
+    {
+        // Reset to base values at the start of the turn
+        MainActions = BaseMainActions;
+        BonusActions = BaseBonusActions;
+        MainActionsRemaining = MainActions;
+        BonusActionsRemaining = BonusActions;
+        Debug.Log($"Player {LobbyData?.Name}'s action budget reset for new turn. Main: {MainActions}, Bonus: {BonusActions}");
+        // TODO: Potentially notify client about action budget reset
+    }
+    // --- END: IActionBudget Implementation ---
+    
 
 }
 

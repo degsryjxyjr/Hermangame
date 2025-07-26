@@ -17,6 +17,10 @@ public class PlayerClassDefinition : ScriptableObject
     public int baseMagic;
     public float attackRange = 1f;
 
+    [Header("Action Budget")]
+    public int baseMainActions = 1;
+    public int baseBonusActions= 1;
+
     [Header("Visuals")]
     public GameObject characterPrefab;
     public AnimatorOverrideController animatorController;
