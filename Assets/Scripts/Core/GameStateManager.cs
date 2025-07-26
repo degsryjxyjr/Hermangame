@@ -93,15 +93,30 @@ public class GameStateManager : MonoBehaviour
                 CombatService combatService = CombatService.Instance;
                 if (combatService != null)
                 {
-                    // Tell the CombatService to initialize for this specific encounter.
-                    // Pass the list of players involved.
-                    combatService.InitializeForEncounter(playersInCombat /*, encounter details */);
+                    // --- CLEANED UP: Prepare encounter data ---
+                    List<PlayerConnection> playersForEncounter = playersInCombat;
+                    List<EnemyDefinition> enemiesForEncounter = new List<EnemyDefinition>();
+
+                    // Load the test enemy
+                    EnemyDefinition goblinDef = Resources.Load<EnemyDefinition>("Entities/Enemy/Rat");
+                    if (goblinDef != null)
+                    {
+                        enemiesForEncounter.Add(goblinDef);
+                        Debug.Log("GameStateManager: Added Rat to test encounter.");
+                    }
+                    else
+                    {
+                        Debug.LogWarning("GameStateManager: Could not load 'Rat' EnemyDefinition for test encounter.");
+                    }
+
+                    // Pass both player and enemy lists
+                    combatService.InitializeForEncounter(playersForEncounter, enemiesForEncounter);
+                    // --- END CLEANED UP ---
                 }
                 else
                 {
                     Debug.LogError("GameStateManager: Could not find CombatService instance when entering Combat state!");
                 }
-                // --- END NEW ---
                 break;
             // Handle other state entries if needed
             default:

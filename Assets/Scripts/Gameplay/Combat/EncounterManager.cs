@@ -18,6 +18,11 @@ public class EncounterManager : MonoBehaviour
         Defeat     // Players lose
     }
 
+    [Header("Test Setup")]
+    [Tooltip("Drag an EnemyDefinition here for quick testing.")]
+    public EnemyDefinition testEnemyDefinition;
+
+
     private EncounterState _currentState = EncounterState.NotStarted;
     public EncounterState CurrentState => _currentState;
 
@@ -121,8 +126,11 @@ public class EncounterManager : MonoBehaviour
         }
 
         // 1. Instantiate the enemy's visual/model prefab
+        Debug.Log($"Attempting to spawn enemy prefab: {enemyDef.modelPrefab.name} at position {position}");
         GameObject enemyGO = Instantiate(enemyDef.modelPrefab, position, Quaternion.identity);
-        
+        Debug.Log($"Spawned enemy GameObject: {enemyGO.name} at position {enemyGO.transform.position}");
+
+
         // 2. Get or Add the EnemyEntity component
         EnemyEntity enemyEntity = enemyGO.GetComponent<EnemyEntity>();
         if (enemyEntity == null)

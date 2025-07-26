@@ -37,7 +37,7 @@ public class CombatService : MonoBehaviour
     /// Initializes the combat service for a new encounter.
     /// Finds or creates the EncounterManager and starts the encounter.
     /// </summary>
-    public void InitializeForEncounter(List<PlayerConnection> players /*, Encounter details */)
+    public void InitializeForEncounter(List<PlayerConnection> players, List<EnemyDefinition> enemiesToSpawn)
     {
         Debug.Log("CombatService: Initializing for new encounter.");
 
@@ -45,15 +45,16 @@ public class CombatService : MonoBehaviour
         // Option A: Assume one exists in the scene (e.g., on a dedicated GameObject)
         _encounterManager = FindFirstObjectByType<EncounterManager>();
         // Option B: Create one dynamically
-        // if (_encounterManager == null)
-        // {
-        //     GameObject emGO = new GameObject("EncounterManager");
-        //     _encounterManager = emGO.AddComponent<EncounterManager>();
-        // }
+        if (_encounterManager == null)
+        {
+            Debug.LogWarning("CombatService: Could not find EncounterManager so creating one!");
+             GameObject emGO = new GameObject("EncounterManager");
+             _encounterManager = emGO.AddComponent<EncounterManager>();
+        }
 
         if (_encounterManager == null)
         {
-            Debug.LogError("CombatService: Could not find or create EncounterManager!");
+            
             // TODO: Handle error, maybe transition back to Map state?
             return;
         }
@@ -68,7 +69,7 @@ public class CombatService : MonoBehaviour
 
         // 3. Tell EncounterManager to start the encounter
         // TODO: Get actual enemy definitions based on the encounter details
-        List<EnemyDefinition> enemiesToSpawn = new List<EnemyDefinition>(); // Placeholder
+        //List<EnemyDefinition> enemiesToSpawn = new List<EnemyDefinition>(); // Placeholder
         // Example: enemiesToSpawn.Add(Resources.Load<EnemyDefinition>("Enemies/Goblin"));
         _encounterManager.StartEncounter(players, enemiesToSpawn /*, other details */);
 
