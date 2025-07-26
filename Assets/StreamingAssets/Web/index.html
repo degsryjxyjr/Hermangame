@@ -195,17 +195,28 @@
             const isVisible = panel.style.display === 'block';
             panel.style.display = isVisible ? 'none' : 'block';
 
-            // <--  logic to show/hide stats display -->
-            if (statsDisplay) { // Check if element exists
+            // Adjust stats display visibility based on context
+            if (statsDisplay) {
                 if (isVisible) {
-                    // Inventory is being closed, show stats
-                    statsDisplay.style.display = 'block';
+                    // Inventory closing
+                    if (isInCombat) {
+                        // Keep stats hidden in combat, or show combat-specific stats
+                        statsDisplay.style.display = 'none';
+                    } else {
+                        // Show main stats outside combat
+                        statsDisplay.style.display = 'block';
+                    }
                 } else {
-                    // Inventory is being opened, hide stats
+                    // Inventory opening, hide stats in both cases probably
                     statsDisplay.style.display = 'none';
                 }
             }
 
+            // In combat, maybe also hide/show action buttons?
+            const actionsDiv = document.getElementById('availableActions');
+            if (actionsDiv && isInCombat) {
+                actionsDiv.style.display = isVisible ? 'block' : 'none'; // Hide actions when inv open
+            }
 
             if (!isVisible) { // If we are opening the panel
                 sendMessage({ type: "inventory", action: "get" }); // Request full inventory data
@@ -500,11 +511,18 @@
                     break;
                     // <-- End of stats_update case -->
 
-                case 'encounter_start': // Message sent by CombatService/EncounterManager
-                    isInCombat = true;
-                    currentCombatState = msg; // Assume msg contains players, enemies, turn order
-                    updateCombatView(msg);
-                    logCombatMessage("Encounter started!", "system");
+                case "encounter_start":
+                    if (isInCombat) {
+                        currentCombatState = msg; // Store the full encounter data
+                        logCombatMessage(msg.message, "system");
+                        updatePlayerListCombat(msg.players);
+                        updateEnemyListCombat(msg.enemies);
+                        // Highlight initial turn entity if included or wait for turn_start
+                        if (msg.turnOrder && msg.turnOrder.length > 0) {
+                            // Maybe highlight the first entity or wait for turn_start
+                            // highlightCurrentTurnEntity(msg.turnOrder[0]); // Example
+                        }
+                    }
                     break;
 
                 case 'encounter_end': // Message sent by CombatService/EncounterManager
@@ -514,12 +532,87 @@
                     // Maybe show a victory/defeat message or automatically transition?
                     break;
 
-                case 'turn_start': // Message sent by CombatService/EncounterManager
-                    // msg might contain the entity whose turn it is (ID, name)
-                    updateCombatView({ currentTurnEntity: msg.entity }); // Partial update
-                    logCombatMessage(`It's ${msg.entity}'s turn.`, "system");
-                    // Enable/disable action buttons based on if it's the player's turn
-                    updateActionButtons(msg.entity); // Implement this function
+                // Inside the main message switch statement
+                case "turn_start":
+                    if (isInCombat && currentCombatState) {
+                        logCombatMessage(msg.message, "system");
+                        highlightCurrentTurnEntity(msg.entity); // Implement this function
+
+                        const availableActionsDiv = document.getElementById('availableActions');
+                        if (availableActionsDiv) {
+                            availableActionsDiv.innerHTML = ''; // Clear previous actions
+
+                            // Check if it's the CURRENT PLAYER'S turn
+                            if (msg.entity.type === "player" && msg.entity.id === currentPlayerId) {
+                                logDebug("It's my turn! Enabling actions.");
+
+                                // --- Add Action Buttons ---
+                                // 1. Basic Attack
+                                const attackBtn = document.createElement('button');
+                                attackBtn.className = 'combat-action-btn';
+                                attackBtn.textContent = 'Melee Attack';
+                                attackBtn.onclick = () => sendCombatAction('melee_attack', {}); // Requires target selection
+                                availableActionsDiv.appendChild(attackBtn);
+
+                                // 2. Defend (Example)
+                                const defendBtn = document.createElement('button');
+                                defendBtn.className = 'combat-action-btn';
+                                defendBtn.textContent = 'Defend';
+                                defendBtn.onclick = () => sendCombatAction('defend', {});
+                                availableActionsDiv.appendChild(defendBtn);
+
+                                // 3. Use Item (Potions) - Requires inventory data and target selection
+                                // Iterate through inventoryData (assuming it's updated) to find usable items
+                                if (Array.isArray(inventoryData)) {
+                                    inventoryData.forEach(item => {
+                                        // Assuming item has properties like type, isConsumable, etc.
+                                        if (item.isConsumable) { // Define your criteria
+                                            const useItemBtn = document.createElement('button');
+                                            useItemBtn.className = 'combat-action-btn';
+                                            useItemBtn.textContent = `Use ${item.name}`;
+                                            useItemBtn.dataset.itemId = item.id; // Store item ID
+                                            useItemBtn.onclick = () => {
+                                                // Example: Simple use on self, or prompt for target
+                                                // For simplicity, assume self-target or add target selection logic
+                                                sendCombatAction('use_item', { itemId: item.id /*, targetId: currentPlayerId */ });
+                                            };
+                                            availableActionsDiv.appendChild(useItemBtn);
+                                        }
+                                    });
+                                }
+
+                                // 4. Use Ability (Magic/Spells) - Requires player abilities data
+                                // You'd need to track player abilities (sent by server?) and create buttons similarly.
+                                // Example (assuming playerStats has an 'abilities' array sent by server):
+                                // if (Array.isArray(playerStats.abilities)) {
+                                //   playerStats.abilities.forEach(ability => {
+                                //     const useAbilityBtn = document.createElement('button');
+                                //     useAbilityBtn.className = 'combat-action-btn';
+                                //     useAbilityBtn.textContent = ability.name;
+                                //     useAbilityBtn.dataset.abilityId = ability.id;
+                                //     useAbilityBtn.onclick = () => sendCombatAction('use_ability', { abilityId: ability.id /*, targetId: ... */ });
+                                //     availableActionsDiv.appendChild(useAbilityBtn);
+                                //   });
+                                // }
+
+                                // --- Target Selection ---
+                                // You will likely need logic to let the player *select* a target
+                                // (player or enemy) after clicking an action like Attack or Use Item.
+                                // This could involve:
+                                // - Adding a "Select Target" message to the log.
+                                // - Adding click handlers to player/enemy entries in their lists.
+                                // - Storing the selected target ID.
+                                // - Modifying sendCombatAction to include the targetId.
+                                // For now, actions like melee_attack will need target selection logic.
+                                logDebug("Please select a target for your action.");
+
+                            } else {
+                                logDebug(`It's ${msg.entity.name}'s turn (${msg.entity.type}).`);
+                                // Optionally disable action buttons or show a "Wait for your turn" message
+                                // inside availableActionsDiv
+                            }
+                        }
+                    }
                     break;
 
                 case 'stats_update':
@@ -553,11 +646,26 @@
 
         function enterCombatMode() {
             document.getElementById('combatPanel').style.display = 'block';
-            // Hide other non-combat UI if needed (inventory button might stay)
-            // document.getElementById('someOtherNonCombatUI').style.display = 'none';
+            // Hide main game stats if separate
+            const statsDisplay = document.getElementById('playerStatsDisplay');
+            if (statsDisplay) statsDisplay.style.display = 'none';
+
+            // Ensure inventory panel is hidden initially when entering combat
+            document.getElementById('inventoryPanel').style.display = 'none';
+            // Make sure the inventory button is visible (or add one to combat panel)
+            document.getElementById('inventoryButton').style.display = 'block'; // Or adjust as needed
+
+            // Clear previous state/logs
+            clearCombatLog();
+            // Clear player/enemy lists if needed
+            if (document.getElementById('playerListCombat')) document.getElementById('playerListCombat').innerHTML = '';
+            if (document.getElementById('enemyListCombat')) document.getElementById('enemyListCombat').innerHTML = '';
+            if (document.getElementById('availableActions')) document.getElementById('availableActions').innerHTML = '';
+
+            isInCombat = true;
+            currentCombatState = null;
             logDebug("Entered combat mode.");
-            // Request initial combat state if needed, or wait for 'encounter_start' message
-            // sendMessage({ type: "get_combat_state" }); // If you implement this on the server
+            // Wait for 'encounter_start' message to populate UI
         }
 
         function exitCombatMode() {
@@ -588,16 +696,29 @@
 
         function updatePlayerListCombat(players) {
             const container = document.getElementById('playerListCombat');
+            if (!container) return;
             container.innerHTML = '';
-            players.forEach(playerData => { // playerData should contain name, currentHealth, maxHealth, etc.
+            
+            players.forEach(playerData => {
                 const playerEl = document.createElement('div');
-                playerEl.className = `combatant player`; // Add 'current-turn' class if applicable
-                playerEl.dataset.playerId = playerData.id; // Assuming server sends an ID
-
-                const nameEl = document.createElement('span');
-                nameEl.className = 'combatant-name';
-                nameEl.textContent = playerData.name;
-
+                playerEl.className = `combatant player`;
+                playerEl.dataset.playerId = playerData.id;
+                
+                // Name and Class
+                const nameEl = document.createElement('div');
+                nameEl.className = 'combatant-header';
+                nameEl.innerHTML = `<strong>${playerData.name}</strong> <span class="combatant-class">${playerData.class || 'Adventurer'}</span>`;
+                
+                // Stats Row
+                const statsEl = document.createElement('div');
+                statsEl.className = 'combatant-stats';
+                statsEl.innerHTML = `
+                    <span class="stat">ATK: ${playerData.attack || 0}</span>
+                    <span class="stat">DEF: ${playerData.defense || 0}</span>
+                    <span class="stat">MAG: ${playerData.magic || 0}</span>
+                `;
+                
+                // Health Bar (from old version)
                 const hpBarEl = document.createElement('div');
                 hpBarEl.className = 'hp-bar';
                 const hpFillEl = document.createElement('div');
@@ -607,11 +728,13 @@
                 const hpTextEl = document.createElement('span');
                 hpTextEl.className = 'hp-text';
                 hpTextEl.textContent = `${playerData.currentHealth}/${playerData.maxHealth}`;
-
+                
                 hpBarEl.appendChild(hpFillEl);
                 hpBarEl.appendChild(hpTextEl);
-
+                
+                // Assemble everything
                 playerEl.appendChild(nameEl);
+                playerEl.appendChild(statsEl);
                 playerEl.appendChild(hpBarEl);
                 container.appendChild(playerEl);
             });
@@ -619,38 +742,53 @@
 
         function updateEnemyListCombat(enemies) {
             const container = document.getElementById('enemyListCombat');
+            if (!container) return;
             container.innerHTML = '';
-            enemies.forEach(enemyData => { // enemyData should contain name, currentHealth, maxHealth, id, etc.
+            
+            enemies.forEach(enemyData => {
                 const enemyEl = document.createElement('div');
-                enemyEl.className = `combatant enemy`; // Add 'current-turn' class if applicable
+                enemyEl.className = `combatant enemy`;
                 enemyEl.dataset.enemyId = enemyData.id;
-
-                const nameEl = document.createElement('span');
-                nameEl.className = 'combatant-name';
-                nameEl.textContent = `${enemyData.name || "Unknown Enemy"}`; // Fallback name
-
+                
+                // Name
+                const nameEl = document.createElement('div');
+                nameEl.className = 'combatant-header';
+                nameEl.innerHTML = `<strong>${enemyData.name || "Unknown Enemy"}</strong>`;
+                
+                // Stats Row
+                const statsEl = document.createElement('div');
+                statsEl.className = 'combatant-stats';
+                statsEl.innerHTML = `
+                    <span class="stat">ATK: ${enemyData.attack || 0}</span>
+                    <span class="stat">DEF: ${enemyData.defense || 0}</span>
+                    <span class="stat">MAG: ${enemyData.magic || 0}</span>
+                `;
+                
+                // Health Bar (from old version with color changes)
                 const hpBarEl = document.createElement('div');
                 hpBarEl.className = 'hp-bar';
                 const hpFillEl = document.createElement('div');
                 hpFillEl.className = 'hp-fill';
-                // Ensure maxHealth is not zero to avoid division by zero
                 const hpPercent = enemyData.maxHealth > 0 ? (enemyData.currentHealth / enemyData.maxHealth) * 100 : 0;
                 hpFillEl.style.width = `${hpPercent}%`;
-                // Change color based on HP? e.g., red for low HP?
+                
+                // Dynamic health bar coloring
                 if (hpPercent < 30) {
-                    hpFillEl.style.background = 'linear-gradient(to right, #f44336, #f44336)'; // Solid red
+                    hpFillEl.style.background = 'linear-gradient(to right, #f44336, #f44336)';
                 } else if (hpPercent < 60) {
-                    hpFillEl.style.background = 'linear-gradient(to right, #f44336, #FFC107)'; // Red to Yellow
+                    hpFillEl.style.background = 'linear-gradient(to right, #f44336, #FFC107)';
                 }
-
+                
                 const hpTextEl = document.createElement('span');
                 hpTextEl.className = 'hp-text';
                 hpTextEl.textContent = `${enemyData.currentHealth}/${enemyData.maxHealth}`;
-
+                
                 hpBarEl.appendChild(hpFillEl);
                 hpBarEl.appendChild(hpTextEl);
-
+                
+                // Assemble everything
                 enemyEl.appendChild(nameEl);
+                enemyEl.appendChild(statsEl);
                 enemyEl.appendChild(hpBarEl);
                 container.appendChild(enemyEl);
             });
@@ -707,6 +845,11 @@
 
         function sendCombatAction(actionType, details = {}) {
             // Send the player's chosen action to the server
+
+            if (!isInCombat || !currentPlayerId) {
+                logDebug("Cannot send action: Not in combat or player ID unknown.");
+                return;
+            }
             const actionMessage = {
                 type: "combat_action", // Message type for PlayerManager->CombatService
                 action_type: actionType, // e.g., "melee_attack", "use_ability", "use_item"
@@ -758,6 +901,28 @@
                         hpFillEl.style.background = ''; // Relies on CSS default
                     }
                 }
+            }
+        }
+
+
+
+        function highlightCurrentTurnEntity(entityInfo) {
+            // Remove highlight from all player and enemy entries first
+            const playerEntries = document.querySelectorAll('#playerListCombat > div');
+            const enemyEntries = document.querySelectorAll('#enemyListCombat > div');
+            playerEntries.forEach(el => el.classList.remove('current-turn'));
+            enemyEntries.forEach(el => el.classList.remove('current-turn'));
+
+            // Find and highlight the correct entry
+            let targetElement = null;
+            if (entityInfo.type === 'player') {
+                targetElement = document.querySelector(`#playerListCombat > div[data-player-id="${entityInfo.id}"]`);
+            } else if (entityInfo.type === 'enemy') {
+                targetElement = document.querySelector(`#enemyListCombat > div[data-enemy-id="${entityInfo.id}"]`);
+            }
+
+            if (targetElement) {
+                targetElement.classList.add('current-turn');
             }
         }
 

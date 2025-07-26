@@ -19,7 +19,7 @@ MonoBehaviour:
   supportedTargetTypes: 02000000
   range: 5
   radius: 2
-  baseEffectValue: 50
+  baseEffectValue: 20
   effectLogicSource: {fileID: 5272473619623566952, guid: 3c1c5488a63fe77488388b267d346718, type: 3}
   effectPrefab: {fileID: 7235997375035445226, guid: 296d09d3e8be59e4a8ddd0ffa53e68ff, type: 3}
   animationTrigger: 

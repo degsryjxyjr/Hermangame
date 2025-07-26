@@ -514,3 +514,35 @@ button {
         height: 120px; /* Slightly smaller log */
     }
 }
+
+/* Add to styles.css */
+.current-turn {
+    border: 2px solid gold !important;
+    background-color: rgba(255, 215, 0, 0.2); /* Light gold background */
+    font-weight: bold;
+}
+
+/* Optional: Specific styles for combat action buttons if default isn't enough */
+
+.combat-action-btn {
+    background-color: #4CAF50; /* Green */
+    border: none;
+    color: white;
+    padding: 10px 15px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    margin: 4px 2px;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+.combat-action-btn:hover {
+    background-color: #45a049;
+}
+
+.combat-action-btn:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
+}

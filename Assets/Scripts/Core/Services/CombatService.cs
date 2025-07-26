@@ -16,6 +16,9 @@ public class CombatService : MonoBehaviour
     // --- Reference to EncounterManager ---
     // This will be instantiated or found in the combat scene.
     private EncounterManager _encounterManager;
+
+    public EncounterManager GetEncounterManager() => _encounterManager;
+
     // --- End Reference ---
 
     private void Awake()
@@ -76,77 +79,299 @@ public class CombatService : MonoBehaviour
         // The EncounterManager will now spawn enemies, set up turn order, and notify us via events.
     }
 
-    // --- EncounterManager Event Handlers ---
+
+    // --- EncounterManager Event Handlers with Server Messages ---
+
     private void OnEncounterStarted_Internal()
     {
         Debug.Log("CombatService: Received OnEncounterStarted from EncounterManager.");
-        // TODO: Send initial encounter state to all clients
-        // e.g., player/enemy HP, turn order
-        // GameServer.Instance.Broadcast(new { type = "encounter_start", ... });
+        
+        if (_encounterManager == null)
+        {
+            Debug.LogError("CombatService: OnEncounterStarted_Internal called but _encounterManager is null!");
+            return;
+        }
+
+        // --- Prepare Initial Encounter State Data ---
+        var encounterData = new Dictionary<string, object>
+        {
+            ["type"] = "encounter_start",
+            ["status"] = "active",
+            ["message"] = "Combat encounter has begun!"
+        };
+
+        // Add Player Data
+        var playersData = new List<object>();
+        foreach (var player in _encounterManager.GetActivePlayers())
+        {
+            if (player != null)
+            {
+                playersData.Add(new
+                {
+                    id = player.NetworkId, // Use NetworkId for identification
+                    name = player.LobbyData?.Name ?? "Unknown Player",
+                    currentHealth = player.CurrentHealth,
+                    maxHealth = player.MaxHealth,
+                    attack = player.Attack,
+                    defense = player.Defense,
+                    magic = player.Magic,
+                    isAlive = player.IsAlive()
+                    // Add other relevant player data for the combat view
+                });
+            }
+        }
+        encounterData["players"] = playersData;
+
+        // Add Enemy Data
+        var enemiesData = new List<object>();
+        foreach (var enemy in _encounterManager.GetActiveEnemies())
+        {
+            if (enemy != null)
+            {
+                // Get the base definition name, or fallback
+                string enemyName = enemy.GetEntityName() ?? "Unknown Enemy";
+                // If EnemyEntity stores a reference to its definition, you can get more details
+                // string enemyName = enemy.EnemyDefinition?.displayName ?? enemy.GetEntityName() ?? "Unknown Enemy";
+
+                enemiesData.Add(new
+                {
+                    // Use InstanceID or a unique ID assigned by EncounterManager for client targeting
+                    id = enemy.GetInstanceID().ToString(), 
+                    name = enemyName,
+                    currentHealth = enemy.CurrentHealth,
+                    maxHealth = enemy.MaxHealth,
+                    attack = enemy.Attack,
+                    defense = enemy.Defense,
+                    magic = enemy.Magic,
+                    isAlive = enemy.IsAlive()
+                    // Add other relevant enemy data (icon path if needed for client UI?)
+                    // icon = enemy.EnemyDefinition?.icon != null ? $"images/enemies/{enemy.EnemyDefinition.icon.name}" : "images/enemies/default-enemy.jpg"
+                });
+            }
+        }
+        encounterData["enemies"] = enemiesData;
+
+        // Add Initial Turn Order (simplified list of IDs for now)
+        var turnOrderData = new List<object>();
+        foreach (var entity in _encounterManager.GetTurnOrder())
+        {
+            if (entity is PlayerConnection player)
+            {
+                turnOrderData.Add(new { type = "player", id = player.NetworkId });
+            }
+            else if (entity is EnemyEntity enemy)
+            {
+                turnOrderData.Add(new { type = "enemy", id = enemy.GetInstanceID().ToString() });
+            }
+        }
+        encounterData["turnOrder"] = turnOrderData;
+
+        // --- Send Initial Encounter State to ALL Players in the Encounter ---
+        foreach (var player in _encounterManager.GetActivePlayers())
+        {
+            if (player != null)
+            {
+                GameServer.Instance.SendToPlayer(player.NetworkId, encounterData);
+                Debug.Log($"CombatService: Sent 'encounter_start' message to player {player.LobbyData?.Name ?? player.NetworkId}");
+            }
+        }
     }
 
     private void OnEncounterEnded_Internal()
     {
         Debug.Log("CombatService: Received OnEncounterEnded from EncounterManager.");
-        EncounterManager.EncounterState endState = _encounterManager.CurrentState;
-        // TODO: Handle victory/defeat
-        // - Award XP, distribute loot
-        // - Transition to Loot scene or Map scene
-        // - Update player states
-        // GameStateManager.Instance.ChangeState(GameStateManager.GameState.Loot); // or Map
-        // For now, just log
-        if (endState == EncounterManager.EncounterState.Victory)
+        
+        if (_encounterManager == null)
         {
-            Debug.Log("CombatService: Players are victorious!");
+            Debug.LogError("CombatService: OnEncounterEnded_Internal called but _encounterManager is null!");
+            return;
         }
-        else if (endState == EncounterManager.EncounterState.Defeat)
+
+        // Determine the outcome (simplified)
+        string result = "unknown";
+        string message = "The encounter has concluded.";
+        if (_encounterManager.CurrentState == EncounterManager.EncounterState.Victory)
         {
-            Debug.Log("CombatService: Players have been defeated!");
+            result = "victory";
+            message = "Victory! You have defeated the enemies!";
+        }
+        else if (_encounterManager.CurrentState == EncounterManager.EncounterState.Defeat)
+        {
+            result = "defeat";
+            message = "Defeat! You have been overwhelmed...";
+        }
+
+        // --- Prepare Encounter End Data ---
+        var endData = new Dictionary<string, object>
+        {
+            ["type"] = "encounter_end",
+            ["result"] = result,
+            ["message"] = message
+            // TODO: Include rewards, experience gained, loot drops, etc.
+            // ["rewards"] = new { xp = 100, items = new List<object> { ... } }
+        };
+        // --- End Prepare Data ---
+
+        // --- Send Encounter End Message to ALL Players in the Encounter ---
+        foreach (var player in _encounterManager.GetActivePlayers())
+        {
+            if (player != null)
+            {
+                GameServer.Instance.SendToPlayer(player.NetworkId, endData);
+                Debug.Log($"CombatService: Sent 'encounter_end' message (result: {result}) to player {player.LobbyData?.Name ?? player.NetworkId}");
+            }
         }
     }
 
     private void OnTurnStarted_Internal(object turnEntity)
     {
         Debug.Log($"CombatService: Received OnTurnStarted for {GetEntityNameSafe(turnEntity)}.");
-        // TODO: Send message to all clients about whose turn it is.
-        // GameServer.Instance.Broadcast(new { type = "turn_start", entity = ... });
         
-        // If it's an enemy's turn, trigger its AI
-        if (turnEntity is EnemyEntity enemy)
+        if (_encounterManager == null || turnEntity == null)
         {
-            TriggerEnemyAI(enemy);
+            Debug.LogError("CombatService: OnTurnStarted_Internal called but _encounterManager or turnEntity is null!");
+            return;
+        }
+
+        string entityId = null;
+        string entityType = null;
+
+        // Determine the ID and type of the entity whose turn it is
+        if (turnEntity is PlayerConnection player)
+        {
+            entityId = player.NetworkId;
+            entityType = "player";
+        }
+        else if (turnEntity is EnemyEntity enemy)
+        {
+            entityId = enemy.GetInstanceID().ToString(); // Or a unique ID from EncounterManager
+            entityType = "enemy";
+        }
+
+        if (string.IsNullOrEmpty(entityId))
+        {
+            Debug.LogError("CombatService: Could not determine entity ID for turn start message.");
+            return;
+        }
+
+        // --- Prepare Turn Start Data ---
+        var turnData = new Dictionary<string, object>
+        {
+            ["type"] = "turn_start",
+            ["entity"] = new
+            {
+                id = entityId,
+                type = entityType,
+                name = GetEntityNameSafe(turnEntity)
+            },
+            ["message"] = $"{GetEntityNameSafe(turnEntity)}'s turn begins!"
+        };
+        // --- End Prepare Data ---
+
+        // --- Send Turn Start Message to ALL Players in the Encounter ---
+        // Everyone needs to know whose turn it is to update their UI.
+        foreach (var p in _encounterManager.GetActivePlayers())
+        {
+            if (p != null)
+            {
+                GameServer.Instance.SendToPlayer(p.NetworkId, turnData);
+                Debug.Log($"CombatService: Sent 'turn_start' message for {entityType} {GetEntityNameSafe(turnEntity)} to player {p.LobbyData?.Name ?? p.NetworkId}");
+            }
         }
     }
 
-    private void OnPlayerAdded_Internal(PlayerConnection player) { /* ... */ }
+    private void OnPlayerAdded_Internal(PlayerConnection player)
+    {
+        // This event fires when a player is added to the encounter (usually at start)
+        // You might send a specific message if players can join mid-encounter, 
+        // but typically the full state is sent on 'encounter_start'.
+        Debug.Log($"CombatService: Player {player?.LobbyData?.Name ?? "Unknown"} added to encounter.");
+        // Optional: Send a message to other players about the new participant
+        // foreach(var otherPlayer in _encounterManager.GetActivePlayers().Where(p => p != player))
+        // {
+        //     GameServer.Instance.SendToPlayer(otherPlayer.NetworkId, new { type = "player_joined_encounter", playerId = player.NetworkId, playerName = player.LobbyData.Name });
+        // }
+    }
+
     private void OnEnemyAdded_Internal(EnemyEntity enemy)
     {
-        // When an enemy is added, give it a reference back to this EncounterManager
-        // so it can call OnEnemyDefeatedInternal when it dies.
-        if (enemy != null)
+        // This event fires when an enemy is added/spawned.
+        // Notify clients about the new enemy.
+        Debug.Log($"CombatService: Enemy {enemy?.GetEntityName() ?? "Unknown"} added to encounter.");
+
+        // --- Prepare Enemy Spawn Data ---
+        var spawnData = new Dictionary<string, object>
         {
-            enemy.EncounterManager = _encounterManager; // Or this reference if EncounterManager doesn't pass itself
+            ["type"] = "enemy_spawned",
+            ["enemy"] = new
+            {
+                id = enemy.GetInstanceID().ToString(),
+                name = enemy.GetEntityName() ?? "Unknown Enemy",
+                currentHealth = enemy.CurrentHealth,
+                maxHealth = enemy.MaxHealth,
+                // Add other initial enemy data if needed by client
+            },
+            ["message"] = $"{enemy.GetEntityName() ?? "An enemy"} has appeared!"
+        };
+        // --- End Prepare Data ---
+
+        // --- Send Enemy Spawn Message to ALL Players ---
+        foreach (var player in _encounterManager.GetActivePlayers())
+        {
+            if (player != null)
+            {
+                GameServer.Instance.SendToPlayer(player.NetworkId, spawnData);
+                Debug.Log($"CombatService: Sent 'enemy_spawned' message for {enemy.GetEntityName()} to player {player.LobbyData?.Name ?? player.NetworkId}");
+            }
         }
     }
+
     private void OnEnemyDefeated_Internal(EnemyEntity enemy)
     {
         Debug.Log($"CombatService: Received OnEnemyDefeated for {enemy?.GetEntityName() ?? "Unknown Enemy"}.");
-        // TODO: Handle enemy defeat
-        // - Generate/distribute loot
-        // - Award XP
-        // - Update client UI
-        // GameServer.Instance.Broadcast(new { type = "enemy_defeated", enemyId = ... });
-    }
-    // --- End Event Handlers ---
+        
+        if (enemy == null || _encounterManager == null)
+        {
+            Debug.LogError("CombatService: OnEnemyDefeated_Internal called with null enemy or _encounterManager!");
+            return;
+        }
 
-    // --- Helper for Event Handlers ---
+        // --- Prepare Enemy Defeated Data ---
+        var defeatData = new Dictionary<string, object>
+        {
+            ["type"] = "enemy_defeated",
+            ["enemyId"] = enemy.GetInstanceID().ToString(), // ID used by client to identify which enemy UI element to remove/update
+            ["message"] = $"{enemy.GetEntityName() ?? "The enemy"} has been defeated!"
+            // TODO: Include loot drops if decided here, or send separately
+            // ["loot"] = new List<object> { ... }
+        };
+        // --- End Prepare Data ---
+
+        // --- Send Enemy Defeated Message to ALL Players ---
+        foreach (var player in _encounterManager.GetActivePlayers())
+        {
+            if (player != null)
+            {
+                GameServer.Instance.SendToPlayer(player.NetworkId, defeatData);
+                Debug.Log($"CombatService: Sent 'enemy_defeated' message for {enemy.GetEntityName()} to player {player.LobbyData?.Name ?? player.NetworkId}");
+            }
+        }
+    }
+
+    // --- Helper Method for Logging Entity Names ---
     private string GetEntityNameSafe(object entity)
     {
         if (entity is IEntity iEntity) return iEntity.GetEntityName();
         if (entity != null) return entity.ToString();
         return "Null";
     }
-    // --- End Helper ---
+    // --- End Helper Method ---
+
+    // --- End  EncounterManager Event Handlers ---
+
+
+
+
 
     // --- Enemy AI Trigger ---
     private void TriggerEnemyAI(EnemyEntity enemy)
@@ -174,7 +399,7 @@ public class CombatService : MonoBehaviour
         {
             // 3. Execute the ability using AbilityExecutionService
             List<IDamageable> targets = new List<IDamageable> { chosenTarget };
-            
+
             // Note: EnemyEntity doesn't inherit from PlayerConnection.
             // AbilityExecutionService.ExecuteAbility expects a PlayerConnection caster.
             // We need to decide how to handle non-player casters.
@@ -185,7 +410,7 @@ public class CombatService : MonoBehaviour
             // Let's log it for now.
 
             Debug.Log($"CombatService: Enemy {enemy.GetEntityName()} chose to use {chosenAbility.abilityName} on {chosenTarget.GetEntityName()}.");
-            
+
             // TODO: Implement actual enemy action execution.
             // This requires resolving the caster issue mentioned above.
             // Pseudo-code:
@@ -226,6 +451,8 @@ public class CombatService : MonoBehaviour
             // TODO: Send error
             return;
         }
+        
+        Debug.Log($"CombatService: Received combat action from player {playerId}. Action Data: {JsonUtility.ToJson(actionData)}");
 
         // 2. Parse action
         if (actionData.TryGetValue("type", out var typeObj))
@@ -308,7 +535,7 @@ public class CombatService : MonoBehaviour
                         // InventoryService.Instance.UseItem(playerId, itemId);
                         // Assume InventoryService handles turn advancement if needed, or we do it here.
                         // For consistency, let's advance the turn after any player action for now.
-                         _encounterManager.AdvanceTurn();
+                        _encounterManager.AdvanceTurn();
                     }
                     break;
 
