@@ -2,7 +2,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq; // For potential targeting logic
-
+using System;
 /// <summary>
 /// Central service for executing ability effects, handling targeting, costs, and context checks.
 /// Used by CombatService, InventoryService, and potentially direct spell casting.
@@ -35,62 +35,80 @@ public class AbilityExecutionService : MonoBehaviour
     }
 
     /// <summary>
-    /// Executes an ability, handling targeting, effects, and context checks.
+    /// Executes an ability, handling targeting, effects, costs, context checks, and action consumption.
     /// This is the central hub for ability logic.
     /// </summary>
-    /// <param name="caster">The player/entity casting the ability.</param>
+    /// <param name="caster">The IEntity (player or enemy) casting the ability.</param>
     /// <param name="targets">The list of resolved targets for the ability.</param>
     /// <param name="abilityDefinition">The ability to execute.</param>
     /// <param name="context">The context in which the ability is being used.</param>
     /// <returns>True if executed successfully, false otherwise.</returns>
-    public bool ExecuteAbility(PlayerConnection caster, List<IDamageable> targets, AbilityDefinition abilityDefinition, AbilityContext context)
+    public bool ExecuteAbility(IEntity caster, List<IDamageable> targets, AbilityDefinition abilityDefinition, AbilityContext context)
     {
-        if (abilityDefinition == null)
-        {
-            Debug.LogWarning("ExecuteAbility called with null AbilityDefinition.");
-            return false;
-        }
 
+        // --- Validation ---
         if (caster == null)
         {
-            Debug.LogWarning("ExecuteAbility called with null caster.");
+            Debug.LogError("AbilityExecutionService: Cannot execute ability, caster is null.");
+            return false;
+        }
+        if (targets == null || targets.Count == 0)
+        {
+            Debug.LogWarning($"AbilityExecutionService: Cannot execute ability '{abilityDefinition?.abilityName ?? "Unknown"}', targets list is null or empty.");
+            return false;
+        }
+        if (abilityDefinition == null)
+        {
+            Debug.LogError("AbilityExecutionService: Cannot execute ability, abilityDefinition is null.");
             return false;
         }
 
+        string casterName = caster.GetEntityName() ?? "Unknown Entity";
+        Debug.Log($"AbilityExecutionService: Executing ability '{abilityDefinition.abilityName}' from caster '{casterName}' in context '{context}'.");
+
+
         // --- Context Validation ---
-        bool canUseInContext = false;
+        // Check if the ability can be used in the given context
+        bool contextValid = false;
         switch (context)
         {
             case AbilityContext.OutOfCombat:
-                canUseInContext = abilityDefinition.usableOutOfCombat;
+                contextValid = abilityDefinition.usableOutOfCombat;
                 break;
             case AbilityContext.InCombat:
-                canUseInContext = abilityDefinition.usableInCombat;
+                contextValid = abilityDefinition.usableInCombat;
                 break;
             case AbilityContext.Always:
-                canUseInContext = true;
+                contextValid = true; // Always usable, regardless of context
                 break;
         }
 
-        if (!canUseInContext)
+        if (!contextValid)
         {
-            Debug.LogWarning($"Ability {abilityDefinition.abilityName} cannot be used in context {context} by {caster?.LobbyData?.Name ?? "Unknown Caster"}.");
-            // TODO: Send error message to client if needed (e.g., for OOC spell casting)
-            return false;
+            Debug.LogWarning($"AbilityExecutionService: Ability '{abilityDefinition.abilityName}' cannot be used in context '{context}'.");
+            return false; // Fail if context is invalid
         }
+        // --- End Context Validation ---
 
-        // --- Validate Targets against Ability Definition ---
-        // Check if the resolved targets are compatible with the ability's supported types.
-        // This is a simplified check. A full implementation might be more complex.
-        // For now, we assume the caller (CombatService) has resolved valid targets.
-        // A more robust check would involve the specific TargetType used for each target.
-        // For prototype, we'll proceed if targets are provided (or list is empty for area/self).
-        if (targets == null)
+        // --- Action Cost Validation (using IActionBudget) ---
+        int actionCost = abilityDefinition.actionCost; // Default cost if not set
+
+        if (caster is IActionBudget actionEntity)
         {
-             Debug.LogWarning($"ExecuteAbility: Target list is null for ability {abilityDefinition.abilityName}.");
-             return false;
+            if (actionEntity.ActionsRemaining < actionCost)
+            {
+                Debug.LogWarning($"AbilityExecutionService: {casterName} does not have enough actions ({actionEntity.ActionsRemaining}) to cast {abilityDefinition.abilityName} (cost: {actionCost}).");
+                return false; // Fail if entity can't afford the action cost
+            }
+            // Note: We don't consume the action here. Its only needed in combat and handled by CombatService
         }
-        // Further validation could happen inside the IAbilityEffect if needed.
+        else
+        {
+            Debug.LogError($"AbilityExecutionService: Caster '{casterName}' does not implement IActionBudget. Skipping action cost check.");
+            // Depending on design, you might want to fail here if all casters must have budgets.
+        }
+        // --- End Action Cost Validation ---
+
 
         // --- Perform Ability Effects ---
         // This part calls the shared logic or handles list targets
@@ -98,7 +116,7 @@ public class AbilityExecutionService : MonoBehaviour
 
         if (executedSuccessfully)
         {
-            Debug.Log($"Ability {abilityDefinition.abilityName} executed successfully by {caster.LobbyData.Name} on {targets.Count} target(s) (context: {context}).");
+            Debug.Log($"Ability {abilityDefinition.abilityName} executed successfully by {casterName} on {targets.Count} target(s) (context: {context}).");
             // TODO: Trigger animations, VFX, send updates to clients (health changes, mana spent, cooldowns started, etc.)
             // Consider what updates are needed based on context (OOC vs InCombat)
             // These are often handled by the caller (CombatService/InventoryService) or the IAbilityEffect itself.
@@ -111,7 +129,7 @@ public class AbilityExecutionService : MonoBehaviour
     /// Applies the direct effects (heal/damage, stat changes, etc.) of an ability to targets.
     /// This encapsulates the core "what happens" part of an ability.
     /// </summary>
-    private bool ExecuteAbilityEffect(PlayerConnection caster, List<IDamageable> targets, AbilityDefinition abilityDefinition)
+    private bool ExecuteAbilityEffect(IEntity caster, List<IDamageable> targets, AbilityDefinition abilityDefinition)
     {
         // --- Get the IAbilityEffect logic ---
         IAbilityEffect effectLogic = abilityDefinition.GetEffectLogic();
@@ -122,7 +140,7 @@ public class AbilityExecutionService : MonoBehaviour
             // For now, treat as failure.
             return false;
         }
-
+        string casterName = caster.GetEntityName() ?? "Unknown Entity";
         // --- Execute the specific effect logic ---
         // The effect logic handles applying its specific changes (heal, damage, buff, summon, etc.)
         // It receives the caster, the list of targets (which implement IDamageable/IHealable),
@@ -141,7 +159,7 @@ public class AbilityExecutionService : MonoBehaviour
              if (!string.IsNullOrEmpty(abilityDefinition.animationTrigger))
              {
                  // TODO: Trigger animation on the caster's entity
-                 Debug.Log($"Triggering animation '{abilityDefinition.animationTrigger}' for caster {caster.NetworkId}.");
+                 Debug.Log($"Triggering animation '{abilityDefinition.animationTrigger}' for caster {casterName}.");
              }
              // Deduct mana (moved here or handled in ExecuteAbility)
              // ApplyCooldown (conceptual, moved here or handled in ExecuteAbility)
@@ -165,7 +183,7 @@ public class AbilityExecutionService : MonoBehaviour
     /// <param name="target">The target of the item's effect (often the caster).</param>
     /// <param name="abilityDefinition">The ability linked to the item.</param>
     /// <returns>True if executed successfully, false otherwise.</returns>
-    public bool ExecuteAbilityFromItem(PlayerConnection caster, IDamageable target, AbilityDefinition abilityDefinition, AbilityContext context)
+    public bool ExecuteAbilityFromItem(IEntity  caster, IDamageable target, AbilityDefinition abilityDefinition, AbilityContext context)
     {
         // The target is usually predetermined (often self) by the item's design.
         List<IDamageable> targets = new List<IDamageable> { target };

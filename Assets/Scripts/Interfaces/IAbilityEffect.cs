@@ -14,6 +14,6 @@ public interface IAbilityEffect
     /// <param name="targets">The list of resolved targets for the ability (implementing IDamageable).</param>
     /// <param name="abilityDefinition">The definition providing parameters.</param>
     /// <returns>True if the effect was executed successfully, false otherwise.</returns>
-    bool Execute(PlayerConnection caster, List<IDamageable> targets, AbilityDefinition abilityDefinition);
+    bool Execute(IEntity caster, List<IDamageable> targets, AbilityDefinition abilityDefinition);
     // Consider if targets should be a more generic IEntity list in the future for non-damage/heal effects
 }

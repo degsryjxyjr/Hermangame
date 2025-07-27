@@ -222,7 +222,7 @@ public class EncounterManager : MonoBehaviour
 
             // Check if the entity is alive
             bool isAlive = false;
-            if (_currentTurnEntity is IDamageable entity)
+            if (_currentTurnEntity is IEntity entity)
             {
                 isAlive = entity.IsAlive();
             }
@@ -275,7 +275,7 @@ public class EncounterManager : MonoBehaviour
 
     private bool IsCurrentTurnEntityAlive()
     {
-        if (_currentTurnEntity is IDamageable entity) return entity.IsAlive();
+        if (_currentTurnEntity is EnemyEntity entity) return entity.IsAlive();
         if (_currentTurnEntity is PlayerConnection player) return player.IsAlive();
         return false; // Shouldn't happen if turn order is managed correctly
     }
@@ -459,12 +459,12 @@ public class EncounterManager : MonoBehaviour
                 bool consumed = actionEntity.ConsumeAction(actionCost);
                 if (consumed)
                 {
-                    Debug.Log($"EncounterManager: {actionCost}-cost action recorded for current entity. " +
+                    Debug.Log($"EncounterManager: {actionCost} cost action recorded for current entity. " +
                             $"Remaining: {actionEntity.ActionsRemaining}/{actionEntity.TotalActions}");
                 }
                 else
                 {
-                    Debug.LogWarning($"EncounterManager: Failed to record {actionCost}-cost action for current entity. " +
+                    Debug.LogWarning($"EncounterManager: Failed to record {actionCost} cost action for current entity. " +
                                     $"Insufficient actions ({actionEntity.ActionsRemaining}/{actionEntity.TotalActions})");
                 }
             }

@@ -344,28 +344,45 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
 
     // --- Helper Methods for Combat/AI ---
 
+
     /// <summary>
-    /// Gets a random ability from the enemy's unlocked list that is usable in combat.
-    /// This is a simple example for AI decision making.
+    /// Gets a random ability from the enemy's unlocked list that is both usable in combat
+    /// and affordable given the current action budget.
     /// </summary>
-    /// <returns>A random usable ability, or null if none are available/usable.</returns>
+    /// <returns>A random usable and affordable ability, or null if none are available.</returns>
     public AbilityDefinition GetRandomUsableCombatAbility()
     {
         if (UnlockedAbilities == null || UnlockedAbilities.Count == 0)
         {
+            Debug.Log($"{GetEntityName()} has no abilities unlocked");
             return null;
         }
 
-        // Filter for abilities usable in combat
-        var usableAbilities = UnlockedAbilities.Where(a => a != null && a.usableInCombat).ToList();
+        // Filter abilities by:
+        // 1. Must be non-null
+        // 2. Must be usable in combat
+        // 3. Must have action cost <= remaining actions
+        var affordableAbilities = UnlockedAbilities
+            .Where(a => a != null 
+                        && a.usableInCombat 
+                        && a.actionCost <= ActionsRemaining)
+            .ToList();
 
-        if (usableAbilities.Count == 0)
+        if (affordableAbilities.Count == 0)
         {
+            Debug.LogWarning($"{GetEntityName()} has no affordable abilities " +
+                            $"(Remaining Actions: {ActionsRemaining})");
             return null;
         }
 
-        // Return a random one
-        return usableAbilities[UnityEngine.Random.Range(0, usableAbilities.Count)];
+        // Select random ability from affordable options
+        int randomIndex = UnityEngine.Random.Range(0, affordableAbilities.Count);
+        AbilityDefinition chosenAbility = affordableAbilities[randomIndex];
+        
+        Debug.Log($"{GetEntityName()} selected ability: {chosenAbility.abilityName} " +
+                $"(Cost: {chosenAbility.actionCost}, Remaining: {ActionsRemaining})");
+        
+        return chosenAbility;
     }
 
     // Add more AI/Combat related methods as needed

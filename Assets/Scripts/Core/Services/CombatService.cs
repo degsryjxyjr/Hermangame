@@ -393,7 +393,7 @@ public class CombatService : MonoBehaviour
             // For prototype, let's assume we can cast it somehow or handle it specially.
             // Let's log it for now.
 
-            Debug.Log($"CombatService: Enemy {enemy.GetEntityName()} chose to use {chosenAbility.abilityName} on {chosenTarget.GetEntityName()}.");
+            Debug.Log($"CombatService: Enemy {enemy.GetEntityName()} chose to use {chosenAbility.abilityName} on {enemy.GetEntityName()}.");
 
             // TODO: Implement actual enemy action execution.
             // This requires resolving the caster issue mentioned above.
