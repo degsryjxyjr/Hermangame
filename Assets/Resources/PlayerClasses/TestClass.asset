@@ -20,7 +20,7 @@ MonoBehaviour:
   baseDefense: 2
   baseMagic: 2
   attackRange: 1
-  baseActions: 1
+  baseActions: 2
   characterPrefab: {fileID: 7235997375035445226, guid: 487c0c6d42be8b14485c3bb804d3bc62, type: 3}
   animatorController: {fileID: 0}
   startingAbilities:
