@@ -7,17 +7,17 @@ public class CombatService : MonoBehaviour
 {
     public static CombatService Instance { get; private set; }
 
-    // --- Basic Combat State (To be expanded with EncounterManager) ---
+    // --- Basic Combat State  ---
     private bool _isInCombat = false;
-    private string _currentTurnPlayerId = null; // Network ID of the player whose turn it is
-    // TODO: Integrate with EncounterManager for active players/enemies, turn order
-    // --- End Basic Combat State ---
+
+       // - End Basic Combat State -
 
     // --- Reference to EncounterManager ---
     // This will be instantiated or found in the combat scene.
     private EncounterManager _encounterManager;
 
-    public EncounterManager GetEncounterManager() => _encounterManager;
+
+    //public EncounterManager GetEncounterManager() => _encounterManager;
 
     // --- End Reference ---
 
@@ -112,6 +112,7 @@ public class CombatService : MonoBehaviour
                     name = player.LobbyData?.Name ?? "Unknown Player",
                     currentHealth = player.CurrentHealth,
                     maxHealth = player.MaxHealth,
+                    actions = player.MainActionsRemaining,
                     attack = player.Attack,
                     defense = player.Defense,
                     magic = player.Magic,
@@ -169,7 +170,7 @@ public class CombatService : MonoBehaviour
         // --- Send Initial Encounter State to ALL Players in the Encounter ---
         foreach (var player in _encounterManager.GetActivePlayers())
         {
-            if (player != null)
+            if (player != null && player.NetworkId != null)
             {
                 GameServer.Instance.SendToPlayer(player.NetworkId, encounterData);
                 Debug.Log($"CombatService: Sent 'encounter_start' message to player {player.LobbyData?.Name ?? player.NetworkId}");
@@ -215,7 +216,7 @@ public class CombatService : MonoBehaviour
         // --- Send Encounter End Message to ALL Players in the Encounter ---
         foreach (var player in _encounterManager.GetActivePlayers())
         {
-            if (player != null)
+            if (player != null && player.NetworkId != null)
             {
                 GameServer.Instance.SendToPlayer(player.NetworkId, endData);
                 Debug.Log($"CombatService: Sent 'encounter_end' message (result: {result}) to player {player.LobbyData?.Name ?? player.NetworkId}");
@@ -451,59 +452,27 @@ public class CombatService : MonoBehaviour
             // TODO: Send error
             return;
         }
-        
+
         Debug.Log($"CombatService: Received combat action from player {playerId}. Action Data: {JsonUtility.ToJson(actionData)}");
 
-        // --- Determine Action Type for Limiting (same logic) ---
-        bool isMainAction = false;
-        bool isBonusAction = false;
-        string actionType = "";
-        if (actionData.TryGetValue("type", out var typeObj))
-        {
-            actionType = typeObj.ToString();
-            switch (actionType)
-            {
-                case "use_ability":
-                    // For now assume all abilities are mainActions. 
-                    // TODO retrive actionType from the abilityDefinition
-                    isMainAction = true;
-                    break;
-                case "melee_attack":
-                    isMainAction = true;
-                    break;
-                case "use_item":
-                    isBonusAction = true;
-                    break;
-                default:
-                    Debug.LogWarning($"CombatService: Unknown action type '{actionType}' for action limiting. Assuming Main Action.");
-                    isMainAction = true;
-                    break;
-            }
-        }
-        // --- END Determine Action Type ---
+        // All actions are MainActions!!! BonusActions are deprecated
+        bool isMainAction = true;
 
         // --- Check Action Availability using EncounterManager ---
         bool actionAllowed = true;
         if (isMainAction && !_encounterManager.IsMainActionAvailable())
         {
             actionAllowed = false;
-            Debug.LogWarning($"CombatService: Player {playerId} tried to use main action '{actionType}', but main action already used this turn.");
+            Debug.LogWarning($"CombatService: Player {playerId} tried to use an action, but all actions already used this turn.");
             // TODO: Send specific error to client
         }
-        else if (isBonusAction && !_encounterManager.IsBonusActionAvailable())
-        {
-            actionAllowed = false;
-            Debug.LogWarning($"CombatService: Player {playerId} tried to use bonus action '{actionType}', but bonus action already used this turn.");
-            // TODO: Send specific error to client
-        }
+
         // --- END Check Action Availability ---
 
         if (!actionAllowed)
         {
             return; // Do not process the action further
         }
-
-
 
         // 2. Parse action
         if (actionData.TryGetValue("type", out var typeObj))
@@ -519,13 +488,14 @@ public class CombatService : MonoBehaviour
                         string abilityId = abilityIdObj.ToString();
                         string targetSpecifier = targetObj.ToString();
 
-                        // 3. Fetch Ability Definition (placeholder)
-                        var abilityDef = Resources.Load<AbilityDefinition>($"Abilities/{abilityId}");
+                        // 3. Fetch Ability Definition
+                        AbilityDefinition abilityDef = Resources.Load<AbilityDefinition>($"Abilities/{abilityId}");
                         if (abilityDef == null)
                         {
-                            Debug.LogWarning($"CombatService: AbilityDefinition not found: {abilityId}");
+                            Debug.LogError($"CombatService: AbilityDefinition not found: {abilityId}");
                             // TODO: Send error
-                            return;
+                            // Decide if this consumes an action slot. Let's assume it doesn't if it fails to resolve.
+                            break; // Exit switch case
                         }
 
                         // 4. Resolve Target using EncounterManager
@@ -534,7 +504,8 @@ public class CombatService : MonoBehaviour
                         {
                             Debug.LogWarning($"CombatService: Failed to resolve target '{targetSpecifier}' for ability {abilityId}.");
                             // TODO: Send error
-                            return;
+                            // Decide if this consumes an action slot. Let's assume it doesn't if it fails to resolve.
+                            break; // Exit switch case
                         }
 
                         // 5. Delegate to AbilityExecutionService
@@ -549,17 +520,23 @@ public class CombatService : MonoBehaviour
                         // 6. Handle result
                         if (success)
                         {
-                            // Advance turn regardless of action success for now.
-                            // More complex systems might have reactions/extra actions.
-                            _encounterManager.AdvanceTurn();
+                            Debug.Log($"CombatService: Ability {abilityId} executed successfully for player {playerId}.");
+                            // --- Record Action Usage on Success ---
+                            if (isMainAction)
+                            {
+                                _encounterManager.RecordMainActionUsed();
+                            }
                         }
                         else
                         {
                             Debug.Log($"CombatService: Ability {abilityId} execution failed for player {playerId}.");
                             // TODO: Send specific error message to client
-                            // Do not advance turn automatically on failure? Depends on game rules.
-                            // For now, let's advance to keep the game moving.
-                            _encounterManager.AdvanceTurn();
+                            // Decide if failed action consumes the slot. Often it does.
+                            // Let's assume it does for simplicity.
+                            if (isMainAction)
+                            {
+                                _encounterManager.RecordMainActionUsed(); // Failed main action still counts as attempted?
+                            }
                         }
                     }
                     break;
@@ -569,7 +546,7 @@ public class CombatService : MonoBehaviour
                     Debug.Log("CombatService: Basic melee attack logic needs full implementation.");
                     // This could be an ability or direct damage calculation.
                     // For now, advance turn.
-                    _encounterManager.AdvanceTurn();
+                    _encounterManager.RecordMainActionUsed();
                     break;
 
                 case "use_item":
@@ -582,12 +559,9 @@ public class CombatService : MonoBehaviour
                     if (actionData.TryGetValue("itemId", out var itemIdObj))
                     {
                         string itemId = itemIdObj.ToString();
-                        // Delegate to InventoryService. It should check GameState and use the correct context.
-                        // InventoryService.Instance.UseItem(playerId, itemId);
-                        // Assume InventoryService handles turn advancement if needed, or we do it here.
-                        // For consistency, let's advance the turn after any player action for now.
-                        _encounterManager.AdvanceTurn();
+                        InventoryService.Instance.UseItem(playerId, itemId);
                     }
+                    _encounterManager.RecordMainActionUsed();
                     break;
 
                 default:
@@ -596,6 +570,22 @@ public class CombatService : MonoBehaviour
                     break;
             }
         }
+        // --- Check if Current Entity's Turn Should End and Advance if Necessary ---
+        // This check happens AFTER processing the action (successful or not, if slot was consumed)
+        if (_encounterManager.AreCurrentEntityActionsExhausted())
+        {
+            Debug.Log($"CombatService: Entity {_encounterManager.GetCurrentTurnEntityName()} has used all actions. Advancing turn.");
+            _encounterManager.AdvanceTurn();
+        }
+        else
+        {
+            // Optionally, send a message to the client confirming the action
+            // and informing them how many actions they have left.
+            // This would require defining a new message type or adding action data to existing messages.
+            Debug.Log($"CombatService: Player {playerId} action processed. Checking action budget...");
+            // The client would need to query or receive updates on their action budget.
+        }
+        // --- END NEW ---
     }
     // --- End Player Action Processing ---
 

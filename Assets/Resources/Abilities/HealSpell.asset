@@ -19,9 +19,9 @@ MonoBehaviour:
   supportedTargetTypes: 0000000001000000
   range: 1
   radius: 0
-  baseEffectValue: -75
+  baseEffectValue: -35
   effectLogicSource: {fileID: 5272473619623566952, guid: 94cd515323c6d3e45b122d8e77b346ea, type: 3}
   effectPrefab: {fileID: 0}
   animationTrigger: 
-  usableOutOfCombat: 0
+  usableOutOfCombat: 1
   usableInCombat: 1

@@ -18,8 +18,7 @@ public class PlayerClassDefinition : ScriptableObject
     public float attackRange = 1f;
 
     [Header("Action Budget")]
-    public int baseMainActions = 1;
-    public int baseBonusActions= 1;
+    public int baseActions = 1;
 
     [Header("Visuals")]
     public GameObject characterPrefab;

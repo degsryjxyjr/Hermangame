@@ -9,7 +9,7 @@ public class AbilityDefinition : ScriptableObject
     public Sprite icon;
     
     [Header("Resource Costs")]
-    public int manaCost;
+    public int actionCost;
     public float cooldown; // Global or per-target? Consider this.
 
     [Header("Targeting")]

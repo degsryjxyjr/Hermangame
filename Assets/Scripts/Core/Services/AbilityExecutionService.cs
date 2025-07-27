@@ -165,12 +165,11 @@ public class AbilityExecutionService : MonoBehaviour
     /// <param name="target">The target of the item's effect (often the caster).</param>
     /// <param name="abilityDefinition">The ability linked to the item.</param>
     /// <returns>True if executed successfully, false otherwise.</returns>
-    public bool ExecuteAbilityFromItem(PlayerConnection caster, IDamageable target, AbilityDefinition abilityDefinition)
+    public bool ExecuteAbilityFromItem(PlayerConnection caster, IDamageable target, AbilityDefinition abilityDefinition, AbilityContext context)
     {
-        // When used from an item, it's always considered OutOfCombat context for the ability's rules
         // The target is usually predetermined (often self) by the item's design.
         List<IDamageable> targets = new List<IDamageable> { target };
-        return ExecuteAbility(caster, targets, abilityDefinition, AbilityContext.OutOfCombat);
+        return ExecuteAbility(caster, targets, abilityDefinition, context);
     }
 
     // --- Placeholder Methods for Future Expansion ---

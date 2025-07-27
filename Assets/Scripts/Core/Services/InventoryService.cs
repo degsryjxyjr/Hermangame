@@ -152,11 +152,18 @@ public class InventoryService : MonoBehaviour
                         // Get the target IDamageable instance. PlayerConnection implements IDamageable.
                         IDamageable targetConnection = player; // Self-targeting
 
+                        ////As inventorySerivce handles item use we need to tell what the useContext is.
+                        // We fetch the game state from gameStateManager and pass it to abilityExecutionService
+                        var useContext = GameStateManager.Instance.GetCurrentGameState() == GameStateManager.GameState.Combat 
+                            ? AbilityExecutionService.AbilityContext.InCombat 
+                            : AbilityExecutionService.AbilityContext.OutOfCombat;
+
                         // Call the correct method on the AbilityExecutionService singleton
                         bool abilityExecuted = AbilityExecutionService.Instance.ExecuteAbilityFromItem(
-                            caster: casterConnection,         
-                            target: targetConnection,         
-                            abilityDefinition: primaryLinkedAbility // Pass the FIRST AbilityDefinition from the list
+                            caster: casterConnection,
+                            target: targetConnection,
+                            abilityDefinition: primaryLinkedAbility, // Pass the FIRST AbilityDefinition from the list
+                            context: useContext
                         );
                         // --- END CORRECTED CALL ---
 

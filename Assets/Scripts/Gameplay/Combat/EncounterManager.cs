@@ -22,6 +22,10 @@ public class EncounterManager : MonoBehaviour
     [Tooltip("Drag an EnemyDefinition here for quick testing.")]
     public EnemyDefinition testEnemyDefinition;
 
+    [Header("Enemy Spawn Transfrom")]
+    [Tooltip("Drag a Transform here for the enemy spawnpoint.")]
+    public Transform enemySpawnPoint;
+
 
     private EncounterState _currentState = EncounterState.NotStarted;
 
@@ -88,7 +92,7 @@ public class EncounterManager : MonoBehaviour
         {
             if (enemyDef != null)
             {
-                SpawnEnemy(enemyDef);
+                SpawnEnemy(enemyDef, enemySpawnPoint.position);
             }
         }
 
@@ -117,7 +121,7 @@ public class EncounterManager : MonoBehaviour
         Debug.Log($"EncounterManager: Added player {player.LobbyData?.Name ?? "Unknown"} ({player.NetworkId}) to encounter.");
     }
 
-    private void SpawnEnemy(EnemyDefinition enemyDef, Vector3 position, int level)
+    private void SpawnEnemy(EnemyDefinition enemyDef, Vector3 position, int level = 1)
     {
         if (enemyDef?.modelPrefab == null)
         {
@@ -217,7 +221,7 @@ public class EncounterManager : MonoBehaviour
 
             // Check if the entity is alive
             bool isAlive = false;
-            if (_currentTurnEntity is IEntity entity)
+            if (_currentTurnEntity is IDamageable entity)
             {
                 isAlive = entity.IsAlive();
             }
@@ -270,7 +274,7 @@ public class EncounterManager : MonoBehaviour
 
     private bool IsCurrentTurnEntityAlive()
     {
-        if (_currentTurnEntity is IEntity entity) return entity.IsAlive();
+        if (_currentTurnEntity is IDamageable entity) return entity.IsAlive();
         if (_currentTurnEntity is PlayerConnection player) return player.IsAlive();
         return false; // Shouldn't happen if turn order is managed correctly
     }
@@ -438,23 +442,23 @@ public class EncounterManager : MonoBehaviour
     /// Records that the main action has been used by the current entity.
     /// Should be called by CombatService after a successful main action.
     /// </summary>
-    public void RecordMainActionUsed()
+    public void RecordMainActionUsed(int actionCost = 1)
     {
         if (_currentTurnEntity is IActionBudget actionEntity)
         {
-            bool consumed = actionEntity.ConsumeMainAction();
+            bool consumed = actionEntity.ConsumeAction(actionCost);
             if (consumed)
             {
-                Debug.Log("EncounterManager: Main action recorded as used for current entity.");
+                Debug.Log($"EncounterManager: Action recorded as used (cost: {actionCost}) for current entity.");
             }
             else
             {
-                Debug.LogWarning("EncounterManager: RecordMainActionUsed called, but current entity has no main actions left.");
+                Debug.LogWarning($"EncounterManager: RecordActionUsed called with cost {actionCost}, but current entity doesn't have enough action budget.");
             }
         }
         else
         {
-            Debug.LogWarning("EncounterManager: RecordMainActionUsed called, but current turn entity does not implement IActionBudget.");
+            Debug.LogWarning("EncounterManager: RecordActionUsed called, but current turn entity does not implement IActionBudget.");
         }
     }
 
@@ -504,7 +508,7 @@ public class EncounterManager : MonoBehaviour
     // These query the current entity's IActionBudget interface
     public bool IsMainActionAvailable()
     {
-        if (__currentTurnEntity is IActionBudget actionEntity)
+        if (_currentTurnEntity is IActionBudget actionEntity)
         {
             return actionEntity.MainActionsRemaining > 0;
         }
@@ -513,7 +517,7 @@ public class EncounterManager : MonoBehaviour
 
     public bool IsBonusActionAvailable()
     {
-        if (__currentTurnEntity is IActionBudget actionEntity)
+        if (_currentTurnEntity is IActionBudget actionEntity)
         {
             return actionEntity.BonusActionsRemaining > 0;
         }

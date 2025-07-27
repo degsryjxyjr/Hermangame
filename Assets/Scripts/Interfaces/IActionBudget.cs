@@ -1,53 +1,62 @@
 // File: Scripts/Gameplay/Combat/IActionBudget.cs
-using System.Collections.Generic;
-
 /// <summary>
-/// Interface for entities that have a dynamic action budget (e.g., Main Actions, Bonus Actions).
+/// Represents an entity's action economy system, handling variable-cost actions per turn.
+/// Replaces legacy main/bonus action system with unified action points.
 /// </summary>
 public interface IActionBudget
 {
     /// <summary>
-    /// Gets the number of main actions available this turn.
+    /// The base number of actions this entity receives at the start of each turn.
     /// </summary>
-    int MainActions { get; }
+    /// <example>
+    /// A standard character might have 3 TotalActions by default.
+    /// </example>
+    int TotalActions { get; }
 
     /// <summary>
-    /// Gets the number of bonus actions available this turn.
+    /// The number of actions currently available to spend this turn.
     /// </summary>
-    int BonusActions { get; }
+    /// <remarks>
+    /// This value is typically reduced by ConsumeAction() and modified by ModifyCurrentActionBudget().
+    /// </remarks>
+    int ActionsRemaining { get; }
 
     /// <summary>
-    /// Gets the number of main actions remaining that can be used this turn.
+    /// Attempts to consume actions from the current budget.
     /// </summary>
-    int MainActionsRemaining { get; }
+    /// <param name="cost">The action point cost to deduct (defaults to 1 for standard actions)</param>
+    /// <returns>
+    /// True if the entity had sufficient actions and they were consumed.
+    /// False if the cost couldn't be paid (no action taken).
+    /// </returns>
+    /// <example>
+    /// // Standard attack (1 action)
+    /// if (character.ConsumeAction()) Attack();
+    /// 
+    /// // Powerful ability (2 actions)
+    /// if (character.ConsumeAction(2)) UltimateAbility();
+    /// </example>
+    bool ConsumeAction(int cost = 1);
 
     /// <summary>
-    /// Gets the number of bonus actions remaining that can be used this turn.
+    /// Directly modifies the current action budget (positive or negative values).
     /// </summary>
-    int BonusActionsRemaining { get; }
+    /// <param name="change">
+    /// Delta to apply to ActionsRemaining.
+    /// Positive values add actions, negative values remove.
+    /// </param>
+    /// <remarks>
+    /// Clamps to minimum 0. Does not affect TotalActions.
+    /// Useful for temporary buffs/debuffs.
+    /// </remarks>
+    void ModifyCurrentActionBudget(int change);
 
     /// <summary>
-    /// Attempts to consume a main action.
+    /// Resets the action budget at the start of a new turn.
     /// </summary>
-    /// <returns>True if the action was successfully consumed, false otherwise.</returns>
-    bool ConsumeMainAction();
-
-    /// <summary>
-    /// Attempts to consume a bonus action.
-    /// </summary>
-    /// <returns>True if the action was successfully consumed, false otherwise.</returns>
-    bool ConsumeBonusAction();
-
-    /// <summary>
-    /// Modifies the current turn's action budget.
-    /// Positive values add actions, negative values remove them (minimum 0).
-    /// </summary>
-    /// <param name="mainChange">Change in main actions.</param>
-    /// <param name="bonusChange">Change in bonus actions.</param>
-    void ModifyCurrentActionBudget(int mainChange, int bonusChange);
-
-    /// <summary>
-    /// Resets the action budget for the start of a new turn, typically based on the entity's base stats.
-    /// </summary>
+    /// <remarks>
+    /// Typically sets ActionsRemaining = TotalActions.
+    /// May include additional reset logic in implementations.
+    /// </remarks>
     void ResetActionBudgetForNewTurn();
 }

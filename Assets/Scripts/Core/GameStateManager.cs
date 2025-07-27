@@ -50,6 +50,10 @@ public class GameStateManager : MonoBehaviour
     {
         SceneManager.sceneLoaded -= OnSceneLoaded; // Unsubscribe
     }
+    public GameState GetCurrentGameState()
+    {
+        return CurrentState;
+    }
 
     public void ChangeState(GameState newState, bool forceReload = false)
     {
@@ -72,7 +76,7 @@ public class GameStateManager : MonoBehaviour
                 // --- CRITICAL CHANGE 2: Exit early for ALL scene loads ---
                 LoadScene(targetScene);
                 // Defer OnStateEnter and Broadcast until OnSceneLoaded callback
-                return; 
+                return;
             }
         }
 
