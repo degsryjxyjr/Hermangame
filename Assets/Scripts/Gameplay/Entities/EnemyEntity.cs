@@ -131,7 +131,7 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
 
 
     // --- Implementation of IDamageable ---
-    public int TakeDamage(int amount, DamageType type = DamageType.Physical)
+    public int TakeDamage(int amount, AbilityDefinition.DamageType type = AbilityDefinition.DamageType.Physical)
     {
         if (amount <= 0 || !IsAlive())
         {
@@ -143,11 +143,11 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
         // --- Damage Type Specific Calculations ---
         switch (type)
         {
-            case DamageType.Physical:
+            case AbilityDefinition.DamageType.Physical:
                 // Example: Apply defense mitigation
                 damageTaken = Mathf.Max(1, damageTaken - Mathf.FloorToInt(this.Defense / 10f));
                 break;
-            case DamageType.Magic:
+            case AbilityDefinition.DamageType.Magic:
                 // Example: Apply magic resistance
                 damageTaken = Mathf.Max(1, damageTaken - Mathf.FloorToInt(this.Magic / 10f)); // Using Magic as resistance for now
                 break;

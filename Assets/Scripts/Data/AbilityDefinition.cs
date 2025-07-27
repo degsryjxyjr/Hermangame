@@ -1,102 +1,181 @@
 using UnityEngine;
-using System.Collections.Generic; // Needed for List<T>
+using System.Collections.Generic;
 
+/// <summary>
+/// Defines all properties and behaviors of an in-game ability, spell, or skill.
+/// Create assets from: Create -> Game -> Ability
+/// </summary>
 [CreateAssetMenu(menuName = "Game/Ability")]
 public class AbilityDefinition : ScriptableObject
 {
-    [Header("Basic Info")]
-    public string abilityName;
-    public Sprite icon;
+    #region Basic Information
+    [Header("Basic Information")]
     
+    [Tooltip("The display name of this ability (shown in UI)")]
+    public string abilityName = "New Ability";
+    
+    [Tooltip("Icon displayed in action bars and tooltips")]
+    public Sprite icon;
+    #endregion
+
+    #region Resource Costs
     [Header("Resource Costs")]
-    public int actionCost;
-    public float cooldown; // Global or per-target? Consider this.
+    
+    [Tooltip("How many action points this ability consumes when used")]
+    [Min(0)]
+    public int actionCost = 1;
+    
+    [Tooltip("Cooldown time in seconds before this ability can be used again")]
+    [Min(0)]
+    public float cooldown = 0f;
+    #endregion
 
+    #region Targeting
     [Header("Targeting")]
-    [Tooltip("List of target types this ability can be used on. An empty list means targeting is handled specially or is implicit (like Self for potions).")]
-    public List<TargetType> supportedTargetTypes = new List<TargetType> { TargetType.Self }; // Default to Self
+    
+    [Tooltip("What kinds of targets this ability can be used on")]
+    public List<TargetType> supportedTargetTypes = new List<TargetType> { TargetType.Self };
+    
+    [Tooltip("Maximum range from caster in game units (0 = self only)")]
+    [Min(0)]
+    public float range = 1f;
+    
+    [Tooltip("Area of effect radius in game units (0 = single target)")]
+    [Min(0)]
+    public float radius = 0f;
+    #endregion
 
-    // Consider if you need separate range/radius for different target types
-    // For now, keeping it simple
-    public float range = 1f; // Effective range for selecting targets
-    public float radius = 0f; // Radius for Area effects
-
+    #region Effects
     [Header("Effects")]
-    [Tooltip("The core numerical effect. Negative values typically indicate healing.")]
-    public int baseEffectValue; // Renamed from baseDamage for clarity
+    
+    [Tooltip("Base effect value (positive for damage, negative for healing)")]
+    public int baseEffectValue = 10;
+    
+    [Tooltip("Type of damage or healing this ability applies")]
+    public DamageType damageType = DamageType.Physical;
+    
+    [Tooltip("Percentage of caster's Attack stat added to damage (0.5 = 50% of Attack added)")]
+    [Range(0f, 2f)]
+    public float attackScaling = 0f;
+    
+    [Tooltip("Percentage of caster's Magic stat added to healing (0.5 = 50% of Magic added)")]
+    [Range(0f, 2f)]
+    public float healingScaling = 0f;
+    #endregion
 
+    #region Effect Logic
     [Header("Effect Logic")]
-    [Tooltip("Drag a GameObject with an IAbilityEffect script attached here. This defines what the ability actually does.")]
-    public GameObject effectLogicSource; // Reference to a GameObject holding the effect script
+    
+    [Tooltip("Prefab containing the IAbilityEffect component that implements this ability's behavior")]
+    public GameObject effectLogicSource;
+    #endregion
 
-
-    [Header("Visuals & Animation")]
+    #region Visuals & Feedback
+    [Header("Visuals & Feedback")]
+    
+    [Tooltip("Visual effect prefab spawned when this ability is used")]
     public GameObject effectPrefab;
+    
+    [Tooltip("Animation trigger name to activate on the caster")]
     public string animationTrigger;
+    #endregion
 
+    #region Usage Context
     [Header("Usage Context")]
+    
+    [Tooltip("Can this ability be used outside of combat? (e.g. utility spells)")]
     public bool usableOutOfCombat = false;
+    
+    [Tooltip("Can this ability be used during combat?")]
     public bool usableInCombat = true;
+    #endregion
 
-
-    // --- Target Type Enum ---
-    // Keep this comprehensive
+    /// <summary>
+    /// Valid target types for this ability
+    /// </summary>
     public enum TargetType 
     { 
-        Self,           // Caster on themselves
-        SingleAlly,     // One friendly target
-        SingleEnemy,    // One hostile target
-        Area,           // Area around a point (can be ally/enemy based on other logic or another field)
-        AllAllies,      // All friendly targets
-        AllEnemies      // All hostile targets
-        // Add more as needed (e.g., DeadAlly for resurrection?)
+        /// <summary>Ability targets the caster themselves</summary>
+        Self,
+        /// <summary>Ability targets one friendly unit (may include caster)</summary>
+        SingleAlly,
+        /// <summary>Ability targets one hostile unit</summary>
+        SingleEnemy,
+        /// <summary>Ability affects an area (targeting handled by effect logic)</summary>
+        Area,
+        /// <summary>Ability affects all friendly units (may include caster)</summary>
+        AllAllies,
+        /// <summary>Ability affects all hostile units</summary>
+        AllEnemies
     }
-    // --- Link Effect Logic ---
+
     /// <summary>
-    /// Gets the IAbilityEffect script associated with this ability.
+    /// Types of damage/healing this ability can deal
     /// </summary>
-    /// <returns>The IAbilityEffect instance, or null if not found.</returns>
+    public enum DamageType
+    {
+        /// <summary>Physical damage (reduced by Defense)</summary>
+        Physical,
+        /// <summary>Magic damage (reduced by Magic Resistance)</summary>
+        Magic,
+        /// <summary>Fire damage (may interact with fire resistance)</summary>
+        Fire,
+        /// <summary>Ice damage (may slow or freeze targets)</summary>
+        Ice,
+        /// <summary>Lightning damage (may chain between targets)</summary>
+        Lightning,
+        /// <summary>Pure damage (bypasses all resistances)</summary>
+        Pure
+    }
+
+    #region Public Methods
+    /// <summary>
+    /// Gets the IAbilityEffect component that implements this ability's behavior
+    /// </summary>
+    /// <returns>The effect component, or null if not found</returns>
     public IAbilityEffect GetEffectLogic()
     {
-        if (effectLogicSource != null)
+        if (effectLogicSource == null)
         {
-            return effectLogicSource.GetComponent<IAbilityEffect>();
+            Debug.LogWarning($"{abilityName} has no effect logic source assigned");
+            return null;
         }
-        // Debug.LogWarning($"AbilityDefinition {this.abilityName} has no effectLogicSource assigned.");
-        return null;
+        
+        var effect = effectLogicSource.GetComponent<IAbilityEffect>();
+        if (effect == null)
+        {
+            Debug.LogWarning($"{abilityName}'s effect logic source has no IAbilityEffect component");
+        }
+        return effect;
     }
-    // --- END Link Effect Logic ---
-
-    // --- Helper Methods (Optional but useful) ---
 
     /// <summary>
-    /// Checks if this ability supports targeting the caster themselves.
+    /// Checks if this ability can target the caster themselves
     /// </summary>
+    /// <returns>True if self-targeting is allowed</returns>
     public bool CanTargetSelf()
     {
         return supportedTargetTypes.Contains(TargetType.Self) ||
-               supportedTargetTypes.Contains(TargetType.SingleAlly) || // Assuming caster is a valid SingleAlly target
-               supportedTargetTypes.Contains(TargetType.Area) || // Caster can target self's location for area
-               supportedTargetTypes.Contains(TargetType.AllAllies); // Caster is part of AllAllies
-        // Adjust logic based on your specific game rules.
-        // E.g., maybe AllAllies explicitly excludes self? Then remove that check.
+               supportedTargetTypes.Contains(TargetType.SingleAlly) ||
+               supportedTargetTypes.Contains(TargetType.AllAllies);
     }
 
     /// <summary>
-    /// Checks if this ability supports targeting a single ally (other than self).
+    /// Checks if this ability can target a specific ally
     /// </summary>
+    /// <returns>True if single ally targeting is allowed</returns>
     public bool CanTargetSingleAlly()
     {
         return supportedTargetTypes.Contains(TargetType.SingleAlly);
     }
 
     /// <summary>
-    /// Checks if this ability supports targeting a single enemy.
+    /// Checks if this ability can target a specific enemy
     /// </summary>
+    /// <returns>True if single enemy targeting is allowed</returns>
     public bool CanTargetSingleEnemy()
     {
         return supportedTargetTypes.Contains(TargetType.SingleEnemy);
     }
-
-    // Add similar helpers for other target types as needed.
+    #endregion
 }

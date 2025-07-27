@@ -7,5 +7,4 @@ public interface IEntity : IDamageable, IHealable, IActionBudget
     Transform GetPosition(); // Or Transform, or a specific Location class
     // Add methods/events for state changes if needed generally
     // event System.Action OnEntityChanged; 
-    bool IsAlive(); // Might be shared with IDamageable
 }

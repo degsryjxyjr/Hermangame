@@ -393,19 +393,19 @@ public class CombatService : MonoBehaviour
             // For prototype, let's assume we can cast it somehow or handle it specially.
             // Let's log it for now.
 
-            Debug.Log($"CombatService: Enemy {enemy.GetEntityName()} chose to use {chosenAbility.abilityName} on {enemy.GetEntityName()}.");
+            Debug.Log($"CombatService: Enemy {enemy.GetEntityName()} chose to use {chosenAbility.abilityName} on THIS IS NOT IMPLEMENTED.");
 
             // TODO: Implement actual enemy action execution.
             // This requires resolving the caster issue mentioned above.
-            chosenTarget.TakeDamage(10, DamageType.Physical);
-            _encounterManager.AdvanceTurn();
+            //chosenTarget.TakeDamage(10, AbilityDefinition.DamageType.Physical);
+            //_encounterManager.AdvanceTurn();
 
-            // bool success = AbilityExecutionService.Instance.ExecuteAbility(/* enemy as caster */, targets, chosenAbility, AbilityExecutionService.AbilityContext.InCombat);
-            // if (success)
-            // {
-            //     // Handle success (e.g., advance turn)
-            //     _encounterManager.AdvanceTurn();
-            // }
+            bool success = AbilityExecutionService.Instance.ExecuteAbility(enemy, targets, chosenAbility, AbilityExecutionService.AbilityContext.InCombat);
+            if (success)
+            {
+                // Handle success (e.g., advance turn)
+                _encounterManager.AdvanceTurn();
+            }
         }
         else
         {

@@ -129,7 +129,7 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
 
 
     // --- Implementation of IDamageable ---
-    public int TakeDamage(int amount, DamageType type = DamageType.Physical)
+    public int TakeDamage(int amount, AbilityDefinition.DamageType type = AbilityDefinition.DamageType.Physical)
     {
         if (amount <= 0 || !IsAlive())
         {
@@ -141,11 +141,11 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
         // --- Damage Type Specific Calculations ---
         switch (type)
         {
-            case DamageType.Physical:
+            case AbilityDefinition.DamageType.Physical:
                 // Example: Apply defense mitigation
                 damageTaken = Mathf.Max(1, damageTaken - Mathf.FloorToInt(this.Defense / 10f));
                 break;
-            case DamageType.Magic:
+            case AbilityDefinition.DamageType.Magic:
                 // Example: Placeholder for magic resistance
                 // damageTaken = Mathf.Max(1, damageTaken - Mathf.FloorToInt(this.MagicResistance / 10f));
                 break;
@@ -474,12 +474,5 @@ public class LobbyPlayerData
     public string Name;
     public string Role;
     public bool IsReady;
-}
-
-public enum DamageType
-{
-    Physical,
-    Magic, // Or more specific types like Fire, Ice, Lightning
-    // ... others
 }
 
