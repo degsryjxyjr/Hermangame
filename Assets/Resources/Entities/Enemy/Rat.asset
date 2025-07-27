@@ -16,10 +16,11 @@ MonoBehaviour:
   displayName: Rat
   icon: {fileID: 21300000, guid: b1061511c5df5394cabb1a9155931bfe, type: 3}
   modelPrefab: {fileID: 7235997375035445226, guid: fa6bb0abde5aaaa4993a82e0445ef56b, type: 3}
-  baseHealth: 30
+  baseHealth: 45
   baseAttack: 8
   baseDefense: 2
   baseMagic: 0
+  baseActions: 1
   healthGrowth:
     serializedVersion: 2
     m_Curve:

@@ -162,6 +162,7 @@ public class GameStateManager : MonoBehaviour
                     if (goblinDef != null)
                     {
                         enemiesForEncounter.Add(goblinDef);
+                        enemiesForEncounter.Add(goblinDef);
                         Debug.Log("GameStateManager: Added Rat to test encounter.");
                     }
                     else

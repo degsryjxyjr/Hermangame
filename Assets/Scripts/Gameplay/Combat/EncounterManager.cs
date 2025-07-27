@@ -10,6 +10,10 @@ using System;
 /// </summary>
 public class EncounterManager : MonoBehaviour
 {
+    public static EncounterManager Instance { get; private set; }
+
+
+
     // --- Encounter State ---
     public enum EncounterState
     {
@@ -64,6 +68,21 @@ public class EncounterManager : MonoBehaviour
     public int GetActivePlayerCount() => _activePlayers.Count;
     public int GetActiveEnemyCount() => _activeEnemies.Count;
 
+
+
+    private void Awake()
+    {
+        if (Instance != null && Instance != this)
+        {
+            // If another instance exists, destroy this one
+            Debug.LogWarning($"Duplicate EncounterManager instance detected! Destroying {gameObject.name}");
+            Destroy(gameObject);
+            return;
+        }
+        
+        Instance = this;
+        Debug.Log("EncounterManager initialized as singleton");
+    }
 
     // --- Initialization ---
     /// <summary>
@@ -152,12 +171,12 @@ public class EncounterManager : MonoBehaviour
         // If you need to pass data explicitly:
         enemyEntity.InitializeFromDefinition(level);
         
-
+        enemyEntity.EncounterManager = this; // Set the reference
         // EnemyEntity.Awake should then initialize stats etc. based on the definition.
         // If level needs to be passed explicitly and EnemyEntity.Awake runs before we can set it,
         // you might need to call an Initialize method after setting the definition.
         // Let's assume EnemyEntity.Awake handles initialization if _enemyDefinition is set.
-
+        
         // 4. Register the enemy with this EncounterManager
         _activeEnemies.Add(enemyEntity);
         // Use InstanceId for now, but consider a more robust unique ID if needed.

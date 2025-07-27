@@ -45,9 +45,14 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
     // --- Reference to EncounterManager ---
     // This allows the enemy to notify the manager of its death.
     // The EncounterManager can set this when spawning the enemy.
-    [HideInInspector] public EncounterManager EncounterManager { get; set; } = null;
 
+    [SerializeField] private EncounterManager _encounterManager; // Changed from public property to serialized field
 
+    public EncounterManager EncounterManager {
+        get => _encounterManager;
+        set => _encounterManager = value;
+    }
+    
     /// <summary>
     /// Sets the enemy definition and level, then initializes stats
     /// </summary>
@@ -230,9 +235,25 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
         else
         {
             Debug.LogWarning($"Enemy {this.GetEntityName()} died but has no EncounterManager reference. " +
+                             "Trying to find the EncounterManager.");
+
+            //Trying to find the encounterManager
+            EncounterManager = FindFirstObjectByType<EncounterManager>();
+            if (EncounterManager != null)
+            {
+                // The EncounterManager will handle removing this enemy from its lists
+                // and checking win conditions.
+                EncounterManager.OnEnemyDefeatedInternal(this);
+
+            }
+            else
+            {
+                Debug.LogWarning($"Enemy {this.GetEntityName()} died but has no EncounterManager reference. " +
                              "It won't be removed from encounter tracking.");
+            }
+
             // Fallback: Destroy self
-            Destroy(this.gameObject);
+                Destroy(this.gameObject);
             return;
         }
         // 3. Trigger visual/audio feedback (animation, VFX, sound)

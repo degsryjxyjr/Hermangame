@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
 /// <summary>
 /// Defines all properties and behaviors of an in-game ability, spell, or skill.
@@ -147,6 +148,14 @@ public class AbilityDefinition : ScriptableObject
             Debug.LogWarning($"{abilityName}'s effect logic source has no IAbilityEffect component");
         }
         return effect;
+    }
+
+    // Check if ability is from an item
+    public bool IsItemAbility() {
+        // Check if any item references this ability
+        return InventoryService.Instance.allItems.Any(item => 
+            item.linkedAbilities != null && 
+            item.linkedAbilities.Contains(this));
     }
 
     /// <summary>

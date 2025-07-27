@@ -46,6 +46,11 @@ public class GameServer : MonoBehaviour
         Application.runInBackground = true;
     }
 
+    private void OnDestroy()
+    {
+        StopServers();
+    }
+
     private void OnApplicationQuit()
     {
         StopServers();
@@ -53,6 +58,7 @@ public class GameServer : MonoBehaviour
 
     private void StopServers()
     {
+        Debug.Log("Attempting to stop servers...");
         try
         {
             if (_httpServer != null)
@@ -64,7 +70,7 @@ public class GameServer : MonoBehaviour
                 _httpServer.Close();
                 _httpServer = null;
             }
-            
+
             if (_wsServer != null)
             {
                 if (_wsServer.IsListening)
@@ -78,6 +84,7 @@ public class GameServer : MonoBehaviour
         {
             Debug.LogError($"Error stopping servers: {ex.Message}");
         }
+        Debug.Log("Server stop attempt finished.");
     }
     public string GetRoomCode()
     {
@@ -205,46 +212,46 @@ public class GameServer : MonoBehaviour
             Debug.Log($"Served file: {normalizedPath}");
             return;
         }
-         // Requested file does NOT exist
-        else
-        {
-            // --- Improved Fallback Logic using Accept header ---
-            string acceptHeader = context.Request.Headers["Accept"];
-            // Check if the client prefers HTML (indicating likely a page navigation)
-            bool wantsHtml = !string.IsNullOrEmpty(acceptHeader) && acceptHeader.Contains("text/html");
 
-            if (wantsHtml)
-            {
-                // Likely a navigation request for SPA, fallback to index.html is appropriate
-                string fallbackPath = Path.Combine(webRoot, "index.html");
-                if (File.Exists(fallbackPath))
-                {
-                    byte[] fileBytes = File.ReadAllBytes(fallbackPath);
-                    context.Response.ContentType = "text/html";
-                    context.Response.StatusCode = (int)HttpStatusCode.OK;
-                    context.Response.OutputStream.Write(fileBytes, 0, fileBytes.Length);
-                    context.Response.Close(); // Ensure response is closed
-                    Debug.Log($"[SPA Fallback] Served index.html for route: {path}");
-                    return; // Exit after serving fallback
-                }
-                else
-                {
-                    // Fallback file itself is missing
-                    Debug.LogError($"File not found: {normalizedPath} and fallback index.html also missing.");
-                    SendResponse(context, 404, "Not found");
-                    return;
-                }
-            }
-            else
-            {
-                // Likely an asset request (image/css/js), fallback is misleading.
-                // Return a proper 404 error.
-                Debug.LogWarning($"Asset not found: {normalizedPath}. Client expected: {acceptHeader}");
-                SendResponse(context, 404, "Asset not found");
-                return; // Exit after sending 404
-            }
-            // --- End of Improved Fallback Logic ---
+        // File doesn't exist - handle special cases
+        string extension = Path.GetExtension(normalizedPath).ToLower();
+        bool isImageRequest = extension == ".png" || extension == ".jpg" || extension == ".jpeg";
+
+        // For image requests, skip the warning since we expect fallback logic
+        if (!isImageRequest)
+        {
+            Debug.LogWarning($"Asset not found: {normalizedPath}. Client expected: {context.Request.Headers["Accept"]}");
         }
+
+        // Handle SPA fallback for HTML requests
+        string acceptHeader = context.Request.Headers["Accept"];
+        bool wantsHtml = !string.IsNullOrEmpty(acceptHeader) && acceptHeader.Contains("text/html");
+
+        if (wantsHtml)
+        {
+            string fallbackPath = Path.Combine(webRoot, "index.html");
+            if (File.Exists(fallbackPath))
+            {
+                byte[] fileBytes = File.ReadAllBytes(fallbackPath);
+                context.Response.ContentType = "text/html";
+                context.Response.StatusCode = (int)HttpStatusCode.OK;
+                context.Response.OutputStream.Write(fileBytes, 0, fileBytes.Length);
+                context.Response.Close();
+                return;
+            }
+        }
+
+        // For missing images, return 204 (No Content) instead of 404
+        if (isImageRequest)
+        {
+            context.Response.StatusCode = (int)HttpStatusCode.NoContent;
+            context.Response.Close();
+            return;
+        }
+
+        // Default 404 for other cases
+        SendResponse(context, 404, "Not found");
+
     }
 
     private string GetMimeType(string extension)

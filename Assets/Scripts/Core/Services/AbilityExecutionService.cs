@@ -91,30 +91,64 @@ public class AbilityExecutionService : MonoBehaviour
         // --- End Context Validation ---
 
 
-        // --- Action Cost Validation (MODIFIED) ---
-        // Only check and consume action points if the ability is used IN combat.
-        int actionCost = abilityDefinition.actionCost;
-        bool needsActionCost = context == AbilityContext.InCombat; 
-        IActionBudget actionEntity = caster as IActionBudget;
+        // --- Ability Ownership Validation ---
+        // Skip this check if the ability is being executed from an item
+        bool isFromItem = context == AbilityContext.OutOfCombat && 
+                        abilityDefinition.IsItemAbility();
 
-        if (needsActionCost && actionEntity != null)
+        if (!isFromItem)
         {
-            if (actionEntity.ActionsRemaining < actionCost)
+            // Check if caster has this ability in their UnlockedAbilities
+            if (caster is PlayerConnection player)
             {
-                Debug.LogWarning($"AbilityExecutionService: {casterName} does not have enough actions ({actionEntity.ActionsRemaining}) to cast {abilityDefinition.abilityName} (cost: {actionCost}).");
-                return false;
+                if (!player.UnlockedAbilities.Contains(abilityDefinition))
+                {
+                    Debug.LogWarning($"AbilityExecutionService: Player {casterName} does not have ability '{abilityDefinition.abilityName}' in their UnlockedAbilities.");
+                    return false;
+                }
             }
-            // Note: We don't consume the action here yet. Do it after successful execution.
-            // Action consumption logic also needs to be conditional (see below).
+            else if (caster is EnemyEntity enemy)
+            {
+                if (!enemy.UnlockedAbilities.Contains(abilityDefinition))
+                {
+                    Debug.LogWarning($"AbilityExecutionService: Enemy {casterName} does not have ability '{abilityDefinition.abilityName}' in their UnlockedAbilities.");
+                    return false;
+                }
+            }
+            else
+            {
+                Debug.LogWarning($"AbilityExecutionService: Unknown caster type {caster.GetType().Name}. Skipping ability ownership check.");
+                // Depending on your design, you might want to return false here
+            }
         }
-        else if (needsActionCost && actionEntity == null) // NEW: Warn if cost needed but not supported
+        // --- End Ability Ownership Validation ---
+
+
+
+        // --- Action Cost Validation (using IActionBudget) ---
+        int actionCost = abilityDefinition.actionCost; // Default cost if not set
+
+        // Skipping cost validation if not in combat
+        if (context == AbilityContext.InCombat)
         {
-            Debug.LogWarning($"AbilityExecutionService: Context is InCombat, action cost is {actionCost}, but caster '{casterName}' does not implement IActionBudget. Execution might be unintended.");
-            // Depending on design, you might want to fail here strictly.
-            // For now, let's proceed if the context check passed, assuming non-IActionBudget entities are exempt.
+            if (caster is IActionBudget actionEntity)
+            {
+                if (actionEntity.ActionsRemaining < actionCost)
+                {
+                    Debug.LogWarning($"AbilityExecutionService: {casterName} does not have enough actions ({actionEntity.ActionsRemaining}) to cast {abilityDefinition.abilityName} (cost: {actionCost}).");
+                    return false; // Fail if entity can't afford the action cost
+                }
+                // Note: We don't consume the action here. Its only needed in combat and handled by CombatService
+            }
+            else
+            {
+                Debug.LogError($"AbilityExecutionService: Caster '{casterName}' does not implement IActionBudget. Skipping action cost check.");
+                // Depending on design, you might want to fail here if all casters must have budgets.
+            }
         }
-        // If needsActionCost is false (OutOfCombat/Always), skip the check entirely.
+        
         // --- End Action Cost Validation ---
+
 
         // --- Perform Ability Effects ---
         // This part calls the shared logic or handles list targets

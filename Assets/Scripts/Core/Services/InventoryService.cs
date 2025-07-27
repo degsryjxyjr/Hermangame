@@ -9,6 +9,10 @@ public class InventoryService : MonoBehaviour
     // Key: Player Network ID, Value: Their inventory state
     private Dictionary<string, PlayerInventory> _playerInventories = new Dictionary<string, PlayerInventory>();
 
+    //Chace all items
+    public ItemDefinition[] allItems;
+
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -19,6 +23,7 @@ public class InventoryService : MonoBehaviour
         }
         Instance = this;
         DontDestroyOnLoad(gameObject);
+        allItems = Resources.LoadAll<ItemDefinition>("Items");
         Debug.Log("InventoryService initialized and set as singleton");
     }
 
