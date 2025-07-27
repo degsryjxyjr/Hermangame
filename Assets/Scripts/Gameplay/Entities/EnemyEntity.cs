@@ -2,7 +2,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq; // For finding abilities/items if needed
-
+using System;
 /// <summary>
 /// Represents an active enemy instance in the game world, implementing core interfaces.
 /// </summary>
@@ -20,19 +20,19 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
     public int Attack { get; private set; }
     public int Defense { get; private set; }
     public int Magic { get; private set; }
-    // --- : Action Budget Fields ---
-    // Base action counts (from EnemyDefinition or calculated)
-    public int BaseMainActions { get; private set; } = 1; // Default or from definition
-    public int BaseBonusActions { get; private set; } = 1; // Default or from definition
+
+
+    // --- Action Budget Field ---
+    // Base action count (from ClassDefinition)
+    public int BaseActions { get; private set; } = 1; // Default
 
     // Current turn's action counts (can be modified by effects)
-    public int MainActions { get; private set; } = 1;
-    public int BonusActions { get; private set; } = 1;
+    public int TotalActions { get; private set; } = 1;
 
     // Remaining actions for the current turn
-    public int MainActionsRemaining { get; private set; } = 1;
-    public int BonusActionsRemaining { get; private set; } = 1;
+    public int ActionsRemaining { get; private set; } = 1;
     // --- END Action Budget Fields ---
+
     
     // Reference to the list of abilities this enemy instance can use
     public List<AbilityDefinition> UnlockedAbilities { get; private set; } = new List<AbilityDefinition>();
@@ -86,13 +86,12 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
         Defense = Mathf.FloorToInt(_enemyDefinition.baseDefense * _enemyDefinition.defenseGrowth.Evaluate(level));
         Magic = Mathf.FloorToInt(_enemyDefinition.baseMagic * _enemyDefinition.magicGrowth.Evaluate(level));
 
-        // --- Initialize Base Action Counts ---
-        // Deriving from EnemyDefinition or using defaults
-        BaseMainActions = _enemyDefinition?.baseMainActions ?? 1; 
-        BaseBonusActions = _enemyDefinition?.baseBonusActions ?? 1; 
-        // Reset current budget to base values
+        // --- Initialize Action Count --
+        TotalActions = _enemyDefinition?.baseActions ?? 1;
         ResetActionBudgetForNewTurn();
-        // --- END Base Action Counts ---
+
+        Debug.Log($"Initialized enemy {_enemyDefinition.displayName} with {TotalActions} actions");
+        // --- END Action Count ---
 
 
         // Copy innate abilities from the definition
@@ -200,7 +199,7 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
         {
             if (lootItem.item != null)
             {
-                int quantity = Random.Range(lootItem.minQuantity, lootItem.maxQuantity + 1);
+                int quantity = UnityEngine.Random.Range(lootItem.minQuantity, lootItem.maxQuantity + 1);
                 for (int i = 0; i < quantity; i++)
                 {
                     droppedItems.Add(lootItem.item);
@@ -210,9 +209,9 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
         // b. Roll for random loot
         foreach (var lootItem in _enemyDefinition.randomLoot)
         {
-            if (lootItem.item != null && Random.value <= lootItem.dropChance)
+            if (lootItem.item != null && UnityEngine.Random.value <= lootItem.dropChance)
             {
-                int quantity = Random.Range(lootItem.minQuantity, lootItem.maxQuantity + 1);
+                int quantity = UnityEngine.Random.Range(lootItem.minQuantity, lootItem.maxQuantity + 1);
                 for (int i = 0; i < quantity; i++)
                 {
                     droppedItems.Add(lootItem.item);
@@ -274,59 +273,70 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
 
 
     // --- NEW: IActionBudget Implementation ---
-    public bool ConsumeMainAction()
+
+
+    /// <summary>
+    /// Attempts to consume actions with variable cost.
+    /// </summary>
+    public bool ConsumeAction(int cost = 1)
     {
-        if (MainActionsRemaining > 0)
+        try
         {
-            MainActionsRemaining--;
-            Debug.Log($"Enemy {GetEntityName()} consumed a main action. Remaining: {MainActionsRemaining}/{MainActions}");
-            return true;
-        }
-        Debug.Log($"Enemy {GetEntityName()} tried to consume a main action, but none are left.");
-        return false;
-    }
+            if (cost <= 0)
+            {
+                throw new ArgumentException($"Invalid action cost {cost} - must be positive");
+            }
 
-    public bool ConsumeBonusAction()
-    {
-        if (BonusActionsRemaining > 0)
+            if (ActionsRemaining >= cost)
+            {
+                ActionsRemaining -= cost;
+                Debug.Log($"{GetEntityName()} spent {cost} action(s). Remaining: {ActionsRemaining}/{TotalActions}");
+                return true;
+            }
+            return false;
+        }
+        catch (Exception ex)
         {
-            BonusActionsRemaining--;
-            Debug.Log($"Enemy {GetEntityName()} consumed a bonus action. Remaining: {BonusActionsRemaining}/{BonusActions}");
-            return true;
+            Debug.LogError($"{GetEntityName()} action consumption error: {ex.Message}");
+            return false;
         }
-        Debug.Log($"Enemy {GetEntityName()} tried to consume a bonus action, but none are left.");
-        return false;
     }
-
-    public void ModifyCurrentActionBudget(int mainChange, int bonusChange)
+    
+    /// <summary>
+    /// Safely modifies action budget with bounds checking.
+    /// </summary>
+    public void ModifyCurrentActionBudget(int change)
     {
-        // Modify the current turn's total available actions
-        MainActions = Mathf.Max(0, MainActions + mainChange);
-        BonusActions = Mathf.Max(0, BonusActions + bonusChange);
+        try
+        {
+            int newValue = ActionsRemaining + change;
 
-        // Adjust remaining actions, ensuring they don't exceed the new totals
-        MainActionsRemaining = Mathf.Min(MainActionsRemaining + mainChange, MainActions);
-        BonusActionsRemaining = Mathf.Min(BonusActionsRemaining + bonusChange, BonusActions);
+            if (newValue < 0)
+            {
+                throw new ArgumentException(
+                    $"{GetEntityName()} action budget would become negative. Change: {change}, Current: {ActionsRemaining}"
+                );
+            }
 
-        // Ensure remaining actions don't go below zero
-        MainActionsRemaining = Mathf.Max(0, MainActionsRemaining);
-        BonusActionsRemaining = Mathf.Max(0, BonusActionsRemaining);
-
-        Debug.Log($"Enemy {GetEntityName()}'s action budget modified. Main: {MainActions} ({MainActionsRemaining} rem), Bonus: {BonusActions} ({BonusActionsRemaining} rem)");
-        // TODO: Potentially handle effect duration/logic if needed
+            ActionsRemaining = Mathf.Min(newValue, TotalActions);
+            Debug.Log($"{GetEntityName()} actions: {change} → {ActionsRemaining}/{TotalActions}");
+        }
+        catch (ArgumentException ex)
+        {
+            Debug.LogError($"Action budget modification failed: {ex.Message}");
+            ActionsRemaining = 0; // Fail-safe
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError($"Unexpected error in {GetEntityName()}: {ex}");
+            throw new InvalidOperationException("Action budget modification failed", ex);
+        }
     }
-
     public void ResetActionBudgetForNewTurn()
     {
-        // Reset to base values at the start of the turn
-        // Base actions could come from EnemyDefinition if you add fields there
-        // For now, using simple defaults or potentially derived from level/definition
-        // Example: BaseMainActions = _enemyDefinition?.baseMainActions ?? 1;
-        MainActions = BaseMainActions;
-        BonusActions = BaseBonusActions;
-        MainActionsRemaining = MainActions;
-        BonusActionsRemaining = BonusActions;
-        Debug.Log($"Enemy {GetEntityName()}'s action budget reset for new turn. Main: {MainActions}, Bonus: {BonusActions}");
+        ActionsRemaining = TotalActions;
+        Debug.Log($"{GetEntityName()} actions reset to {TotalActions} for new turn");
     }
     // --- END NEW: IActionBudget Implementation ---
 
@@ -355,7 +365,7 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
         }
 
         // Return a random one
-        return usableAbilities[Random.Range(0, usableAbilities.Count)];
+        return usableAbilities[UnityEngine.Random.Range(0, usableAbilities.Count)];
     }
 
     // Add more AI/Combat related methods as needed

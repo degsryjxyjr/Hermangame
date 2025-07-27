@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   abilityName: Health Potion Heal
   icon: {fileID: 0}
-  manaCost: 0
+  actionCost: 1
   cooldown: 0
   supportedTargetTypes: 00000000
   range: 1

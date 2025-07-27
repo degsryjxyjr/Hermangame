@@ -17,7 +17,7 @@ public class CombatService : MonoBehaviour
     private EncounterManager _encounterManager;
 
 
-    //public EncounterManager GetEncounterManager() => _encounterManager;
+    public EncounterManager GetEncounterManager() => _encounterManager;
 
     // --- End Reference ---
 
@@ -112,7 +112,7 @@ public class CombatService : MonoBehaviour
                     name = player.LobbyData?.Name ?? "Unknown Player",
                     currentHealth = player.CurrentHealth,
                     maxHealth = player.MaxHealth,
-                    actions = player.MainActionsRemaining,
+                    actions = player.ActionsRemaining,
                     attack = player.Attack,
                     defense = player.Defense,
                     magic = player.Magic,
@@ -131,8 +131,6 @@ public class CombatService : MonoBehaviour
             {
                 // Get the base definition name, or fallback
                 string enemyName = enemy.GetEntityName() ?? "Unknown Enemy";
-                // If EnemyEntity stores a reference to its definition, you can get more details
-                // string enemyName = enemy.EnemyDefinition?.displayName ?? enemy.GetEntityName() ?? "Unknown Enemy";
 
                 enemiesData.Add(new
                 {
@@ -141,6 +139,7 @@ public class CombatService : MonoBehaviour
                     name = enemyName,
                     currentHealth = enemy.CurrentHealth,
                     maxHealth = enemy.MaxHealth,
+                    actions = enemy.ActionsRemaining,
                     attack = enemy.Attack,
                     defense = enemy.Defense,
                     magic = enemy.Magic,
@@ -181,47 +180,14 @@ public class CombatService : MonoBehaviour
     private void OnEncounterEnded_Internal()
     {
         Debug.Log("CombatService: Received OnEncounterEnded from EncounterManager.");
-        
+
         if (_encounterManager == null)
         {
             Debug.LogError("CombatService: OnEncounterEnded_Internal called but _encounterManager is null!");
             return;
         }
 
-        // Determine the outcome (simplified)
-        string result = "unknown";
-        string message = "The encounter has concluded.";
-        if (_encounterManager.CurrentState == EncounterManager.EncounterState.Victory)
-        {
-            result = "victory";
-            message = "Victory! You have defeated the enemies!";
-        }
-        else if (_encounterManager.CurrentState == EncounterManager.EncounterState.Defeat)
-        {
-            result = "defeat";
-            message = "Defeat! You have been overwhelmed...";
-        }
-
-        // --- Prepare Encounter End Data ---
-        var endData = new Dictionary<string, object>
-        {
-            ["type"] = "encounter_end",
-            ["result"] = result,
-            ["message"] = message
-            // TODO: Include rewards, experience gained, loot drops, etc.
-            // ["rewards"] = new { xp = 100, items = new List<object> { ... } }
-        };
-        // --- End Prepare Data ---
-
-        // --- Send Encounter End Message to ALL Players in the Encounter ---
-        foreach (var player in _encounterManager.GetActivePlayers())
-        {
-            if (player != null && player.NetworkId != null)
-            {
-                GameServer.Instance.SendToPlayer(player.NetworkId, endData);
-                Debug.Log($"CombatService: Sent 'encounter_end' message (result: {result}) to player {player.LobbyData?.Name ?? player.NetworkId}");
-            }
-        }
+        EndCombat();
     }
 
     private void OnTurnStarted_Internal(object turnEntity)
@@ -460,7 +426,7 @@ public class CombatService : MonoBehaviour
 
         // --- Check Action Availability using EncounterManager ---
         bool actionAllowed = true;
-        if (isMainAction && !_encounterManager.IsMainActionAvailable())
+        if (isMainAction && !_encounterManager.IsActionAvailable())
         {
             actionAllowed = false;
             Debug.LogWarning($"CombatService: Player {playerId} tried to use an action, but all actions already used this turn.");
@@ -524,7 +490,7 @@ public class CombatService : MonoBehaviour
                             // --- Record Action Usage on Success ---
                             if (isMainAction)
                             {
-                                _encounterManager.RecordMainActionUsed();
+                                _encounterManager.RecordActionUsed();
                             }
                         }
                         else
@@ -535,7 +501,7 @@ public class CombatService : MonoBehaviour
                             // Let's assume it does for simplicity.
                             if (isMainAction)
                             {
-                                _encounterManager.RecordMainActionUsed(); // Failed main action still counts as attempted?
+                                _encounterManager.RecordActionUsed(); // Failed main action still counts as attempted?
                             }
                         }
                     }
@@ -546,7 +512,7 @@ public class CombatService : MonoBehaviour
                     Debug.Log("CombatService: Basic melee attack logic needs full implementation.");
                     // This could be an ability or direct damage calculation.
                     // For now, advance turn.
-                    _encounterManager.RecordMainActionUsed();
+                    _encounterManager.RecordActionUsed();
                     break;
 
                 case "use_item":
@@ -561,7 +527,7 @@ public class CombatService : MonoBehaviour
                         string itemId = itemIdObj.ToString();
                         InventoryService.Instance.UseItem(playerId, itemId);
                     }
-                    _encounterManager.RecordMainActionUsed();
+                    _encounterManager.RecordActionUsed();
                     break;
 
                 default:
@@ -597,7 +563,7 @@ public class CombatService : MonoBehaviour
         string playerId = player.NetworkId;
 
         // Route combat-specific messages
-        if (_isInCombat && playerId == _currentTurnPlayerId)
+        if (_isInCombat && playerId == _encounterManager.GetCurrentTurnEntityName())
         {
             // It's this player's turn, process their combat action
             ProcessPlayerCombatAction(playerId, msg);
@@ -605,7 +571,7 @@ public class CombatService : MonoBehaviour
         else if (_isInCombat)
         {
              // It's combat, but not this player's turn
-             Debug.Log($"Received combat message from {playerId}, but it's not their turn ({_currentTurnPlayerId}).");
+             Debug.Log($"Received combat message from {playerId}, but it's not their turn ({_encounterManager.GetCurrentTurnEntityName()}).");
              // TODO: Send error message to client
         }
         else
@@ -639,11 +605,53 @@ public class CombatService : MonoBehaviour
     /// </summary>
     public void EndCombat()
     {
+        // TODO: distribute rewards, etc.
+
+
+        // Determine the outcome (simplified)
+        string result = "unknown";
+        string message = "The encounter has concluded.";
+        if (_encounterManager.CurrentState == EncounterManager.EncounterState.Victory)
+        {
+            result = "victory";
+            message = "Victory! You have defeated the enemies!";
+        }
+        else if (_encounterManager.CurrentState == EncounterManager.EncounterState.Defeat)
+        {
+            result = "defeat";
+            message = "Defeat! You have been overwhelmed...";
+        }
+
+        // --- Prepare Encounter End Data ---
+        var endData = new Dictionary<string, object>
+        {
+            ["type"] = "encounter_end",
+            ["result"] = result,
+            ["message"] = message
+            // TODO: Include rewards, experience gained, loot drops, etc.
+            // ["rewards"] = new { xp = 100, items = new List<object> { ... } }
+        };
+        // --- End Prepare Data ---
+
+        // --- Send Encounter End Message to ALL Players in the Encounter ---
+        foreach (var player in _encounterManager.GetActivePlayers())
+        {
+            if (player != null && player.NetworkId != null)
+            {
+                GameServer.Instance.SendToPlayer(player.NetworkId, endData);
+                Debug.Log($"CombatService: Sent 'encounter_end' message (result: {result}) to player {player.LobbyData?.Name ?? player.NetworkId}");
+            }
+        }
+
         _isInCombat = false;
-        _currentTurnPlayerId = null;
-        // TODO: Clean up EncounterManager state
-        // TODO: Send combat end message, distribute rewards, etc.
+
+
+        // Clean up EncounterManager state
+        _encounterManager.CleanUpEncounter();
+
         Debug.Log("Combat ended!");
+        // Change state to map
+        GameStateManager.Instance.ChangeState(GameStateManager.GameState.Map);
     }
 
     

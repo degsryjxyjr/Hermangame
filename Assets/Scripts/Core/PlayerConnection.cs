@@ -28,18 +28,15 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
     public int Level { get; set; } = 1;
     public int Experience { get; set; } = 0;
 
-    // --- Action Budget Fields ---
+    // --- Action Budget Field ---
     // Base action counts (from ClassDefinition)
-    public int BaseMainActions { get; private set; } = 1; // Default
-    public int BaseBonusActions { get; private set; } = 1; // Default
+    public int BaseActions { get; private set; } = 1; // Default
 
     // Current turn's action counts (can be modified by effects)
-    public int MainActions { get; private set; } = 1;
-    public int BonusActions { get; private set; } = 1;
+    public int TotalActions { get; private set; } = 1;
 
     // Remaining actions for the current turn
-    public int MainActionsRemaining { get; private set; } = 1;
-    public int BonusActionsRemaining { get; private set; } = 1;
+    public int ActionsRemaining { get; private set; } = 1;
     // --- END Action Budget Fields ---
 
     // --- Flattened Runtime Stats (formerly in PlayerGameData.RuntimeStats) ---
@@ -86,8 +83,7 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
             Defense = 5;
             Magic = 10;
             // ---  Default Action Budgets ---
-            BaseMainActions = 1;
-            BaseBonusActions = 1;
+            TotalActions = 1; // Unified actions
             ResetActionBudgetForNewTurn();
             // --- END  ---
             return;
@@ -101,16 +97,15 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
         Defense = Mathf.FloorToInt(ClassDefinition.baseDefense * (ClassDefinition.defenseGrowth?.Evaluate(Level) ?? 1.0f));
         Magic = Mathf.FloorToInt(ClassDefinition.baseMagic * (ClassDefinition.magicGrowth?.Evaluate(Level) ?? 1.0f));
 
-        // --- Initialize Base Action Counts ---
-        BaseMainActions = ClassDefinition.baseMainActions;
-        BaseBonusActions = ClassDefinition.baseBonusActions;
+        // --- Initialize Base Action Count ---
+        TotalActions = ClassDefinition.baseActions;
         // Reset current budget to base values
         ResetActionBudgetForNewTurn();
         // --- END ---
 
 
         Debug.Log($"Initialized stats for {LobbyData?.Name ?? "Unknown Player"} (Level {Level} {ClassDefinition.className}): " +
-                  $"HP {CurrentHealth}/{MaxHealth}, ATK {Attack}, DEF {Defense}, MAG {Magic}, MainActions {BaseMainActions}, BonusActions {BaseBonusActions}");
+                  $"HP {CurrentHealth}/{MaxHealth}, ATK {Attack}, DEF {Defense}, MAG {Magic}, Actions {TotalActions}");
 
         // sending player name, class, level and xp etc
         SendStatsUpdateToClient();
@@ -430,57 +425,41 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
     // --- End Implementation of IEquipmentEffect ---
 
     // --- IActionBudget Implementation ---
-    public bool ConsumeMainAction()
+
+    /// <summary>
+    /// Attempts to consume actions with variable cost.
+    /// </summary>
+    /// <param name="cost">Action points to spend (default 1)</param>
+    /// <returns>True if successful, false if insufficient actions</returns>
+    public bool ConsumeAction(int cost = 1)
     {
-        if (MainActionsRemaining > 0)
+        if (ActionsRemaining >= cost)
         {
-            MainActionsRemaining--;
-            Debug.Log($"Player {LobbyData?.Name} consumed a main action. Remaining: {MainActionsRemaining}/{MainActions}");
+            ActionsRemaining -= cost;
+            Debug.Log($"{LobbyData?.Name} spent {cost} action(s). Remaining: {ActionsRemaining}/{TotalActions}");
             return true;
         }
-        Debug.Log($"Player {LobbyData?.Name} tried to consume a main action, but none are left.");
+        Debug.LogWarning($"{LobbyData?.Name} failed to spend {cost} action(s). Has: {ActionsRemaining}/{TotalActions}");
         return false;
     }
 
-    public bool ConsumeBonusAction()
+    /// <summary>
+    /// Directly modifies available actions (positive or negative).
+    /// </summary>
+    public void ModifyCurrentActionBudget(int change)
     {
-        if (BonusActionsRemaining > 0)
-        {
-            BonusActionsRemaining--;
-            Debug.Log($"Player {LobbyData?.Name} consumed a bonus action. Remaining: {BonusActionsRemaining}/{BonusActions}");
-            return true;
-        }
-        Debug.Log($"Player {LobbyData?.Name} tried to consume a bonus action, but none are left.");
-        return false;
+        int newValue = ActionsRemaining + change;
+        ActionsRemaining = Mathf.Clamp(newValue, 0, TotalActions);
+        Debug.Log($"Player {LobbyData?.Name}'s action budget changed by {change}. Now: {ActionsRemaining}/{TotalActions}");
     }
 
-    public void ModifyCurrentActionBudget(int mainChange, int bonusChange)
-    {
-        // Modify the current turn's total available actions
-        MainActions = Mathf.Max(0, MainActions + mainChange);
-        BonusActions = Mathf.Max(0, BonusActions + bonusChange);
-
-        // Adjust remaining actions, ensuring they don't exceed the new totals
-        MainActionsRemaining = Mathf.Min(MainActionsRemaining + mainChange, MainActions);
-        BonusActionsRemaining = Mathf.Min(BonusActionsRemaining + bonusChange, BonusActions);
-
-        // Ensure remaining actions don't go below zero
-        MainActionsRemaining = Mathf.Max(0, MainActionsRemaining);
-        BonusActionsRemaining = Mathf.Max(0, BonusActionsRemaining);
-
-        Debug.Log($"Player {LobbyData?.Name}'s action budget modified. Main: {MainActions} ({MainActionsRemaining} rem), Bonus: {BonusActions} ({BonusActionsRemaining} rem)");
-        // TODO: Potentially notify client about action budget change
-    }
-
+    /// <summary>
+    /// Resets actions to full at turn start.
+    /// </summary>
     public void ResetActionBudgetForNewTurn()
     {
-        // Reset to base values at the start of the turn
-        MainActions = BaseMainActions;
-        BonusActions = BaseBonusActions;
-        MainActionsRemaining = MainActions;
-        BonusActionsRemaining = BonusActions;
-        Debug.Log($"Player {LobbyData?.Name}'s action budget reset for new turn. Main: {MainActions}, Bonus: {BonusActions}");
-        // TODO: Potentially notify client about action budget reset
+        ActionsRemaining = TotalActions;
+        Debug.Log($"Player {LobbyData?.Name}'s actions reset to {TotalActions} for new turn");
     }
     // --- END: IActionBudget Implementation ---
     

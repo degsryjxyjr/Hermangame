@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   abilityName: Rat Bite
   icon: {fileID: 0}
-  manaCost: 0
+  actionCost: 1
   cooldown: 1
   supportedTargetTypes: 02000000
   range: 1

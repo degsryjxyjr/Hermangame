@@ -148,4 +148,4 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _enemyDefinition: {fileID: 11400000, guid: feef605e4fb57b14f8dbb340a4d1f420, type: 2}
-  _level: 1
+  _level: 2

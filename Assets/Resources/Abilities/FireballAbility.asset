@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   abilityName: Fireball
   icon: {fileID: 21300000, guid: 1e22dbe7984a6c2488128a730e332e0b, type: 3}
-  manaCost: 5
+  actionCost: 1
   cooldown: 1
   supportedTargetTypes: 02000000
   range: 5

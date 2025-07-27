@@ -2,6 +2,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq; // For sorting if needed
+using System;
 
 /// <summary>
 /// Manages the state and flow of a single combat encounter.
@@ -293,6 +294,9 @@ public class EncounterManager : MonoBehaviour
         return "None";
     }
 
+
+    
+
     // --- Entity Management ---
     /// <summary>
     /// Called when an enemy is defeated (e.g., by its OnDeath method).
@@ -363,6 +367,8 @@ public class EncounterManager : MonoBehaviour
         if (_currentTurnEntity is PlayerConnection player) return player.LobbyData?.Name ?? player.NetworkId;
         return "Unknown Entity";
     }
+
+    
 
 
     private void EndEncounter()
@@ -438,22 +444,33 @@ public class EncounterManager : MonoBehaviour
 
 
     // --- Methods to Record Actions (via Interface) ---
+
     /// <summary>
-    /// Records that the main action has been used by the current entity.
-    /// Should be called by CombatService after a successful main action.
+    /// Records that an action has been used by the current entity.
+    /// Should be called by CombatService after any successful action.
     /// </summary>
-    public void RecordMainActionUsed(int actionCost = 1)
+    /// <param name="actionCost">The cost of the action (defaults to 1)</param>
+    public void RecordActionUsed(int actionCost = 1)
     {
         if (_currentTurnEntity is IActionBudget actionEntity)
         {
-            bool consumed = actionEntity.ConsumeAction(actionCost);
-            if (consumed)
+            try
             {
-                Debug.Log($"EncounterManager: Action recorded as used (cost: {actionCost}) for current entity.");
+                bool consumed = actionEntity.ConsumeAction(actionCost);
+                if (consumed)
+                {
+                    Debug.Log($"EncounterManager: {actionCost}-cost action recorded for current entity. " +
+                            $"Remaining: {actionEntity.ActionsRemaining}/{actionEntity.TotalActions}");
+                }
+                else
+                {
+                    Debug.LogWarning($"EncounterManager: Failed to record {actionCost}-cost action for current entity. " +
+                                    $"Insufficient actions ({actionEntity.ActionsRemaining}/{actionEntity.TotalActions})");
+                }
             }
-            else
+            catch (Exception ex)
             {
-                Debug.LogWarning($"EncounterManager: RecordActionUsed called with cost {actionCost}, but current entity doesn't have enough action budget.");
+                Debug.LogError($"EncounterManager: Error recording action for current entity: {ex.Message}");
             }
         }
         else
@@ -463,71 +480,73 @@ public class EncounterManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Records that the bonus action has been used by the current entity.
-    /// Should be called by CombatService after a successful bonus action.
+    /// Checks if the current entity has exhausted their action budget.
+    /// Used by CombatService to determine if the entity's turn should end.
     /// </summary>
-    public void RecordBonusActionUsed()
-    {
-        if (_currentTurnEntity is IActionBudget actionEntity)
-        {
-            bool consumed = actionEntity.ConsumeBonusAction();
-             if (consumed)
-            {
-                Debug.Log("EncounterManager: Bonus action recorded as used for current entity.");
-            }
-            else
-            {
-                 Debug.LogWarning("EncounterManager: RecordBonusActionUsed called, but current entity has no bonus actions left.");
-            }
-        }
-        else
-        {
-            Debug.LogWarning("EncounterManager: RecordBonusActionUsed called, but current turn entity does not implement IActionBudget.");
-        }
-    }
-
-    /// <summary>
-    /// Checks if the current entity has used all their available actions.
-    /// Used by CombatService to determine if the entity's turn should end automatically.
-    /// </summary>
-    /// <returns>True if both main and bonus actions are exhausted for the current entity (if it uses actions).</returns>
+    /// <returns>
+    /// True if actions are exhausted (or entity doesn't use actions).
+    /// False if actions remain.
+    /// </returns>
     public bool AreCurrentEntityActionsExhausted()
     {
         if (_currentTurnEntity is IActionBudget actionEntity)
         {
-            // Check if both main and bonus actions are exhausted
-            return actionEntity.MainActionsRemaining <= 0 && actionEntity.BonusActionsRemaining <= 0;
+            bool exhausted = actionEntity.ActionsRemaining <= 0;
+            if (exhausted)
+            {
+                //Debug.Log($"EncounterManager: Current entity has exhausted their action budget");
+            }
+            return exhausted;
         }
-        // If the entity doesn't manage actions, it doesn't consume turns in this way.
-        // Returning false means the turn won't auto-advance due to action exhaustion for this entity.
-        return false;
+        // Entities without action budgets don't auto-end turns from action exhaustion
+        return false; 
     }
+
+
     // --- END: Methods to Record Actions ---
 
     // --- Helper Methods to Check Action Availability ---
-    // These query the current entity's IActionBudget interface
-    public bool IsMainActionAvailable()
+
+    /// <summary>
+    /// Checks if the current entity has any actions available
+    /// </summary>
+    /// <param name="requiredActions">Minimum number of actions needed (default 1)</param>
+    /// <returns>True if entity can perform at least one action</returns>
+    public bool IsActionAvailable(int requiredActions = 1)
     {
         if (_currentTurnEntity is IActionBudget actionEntity)
         {
-            return actionEntity.MainActionsRemaining > 0;
+            bool available = actionEntity.ActionsRemaining >= requiredActions;
+            if (!available)
+            {
+                Debug.Log($"EncounterManager: current entity needs {requiredActions} action(s), " +
+                        $"but only has {actionEntity.ActionsRemaining}/{actionEntity.TotalActions}");
+            }
+            return available;
         }
-        return false; // Not an entity with an action budget, or no current entity
+        return false; // Not an entity with an action budget
     }
 
-    public bool IsBonusActionAvailable()
-    {
-        if (_currentTurnEntity is IActionBudget actionEntity)
-        {
-            return actionEntity.BonusActionsRemaining > 0;
-        }
-        return false;
-    }
     // --- END Helper Methods ---
 
 
 
     // --- Cleanup (Optional) ---
+
+    public void CleanUpEncounter()
+    {
+        // Clean up references to prevent memory leaks if needed
+        _activePlayers.Clear();
+        _activePlayersDict.Clear();
+        _activeEnemies.Clear();
+        _activeEnemiesDict.Clear();
+        _turnOrder.Clear();
+        _currentTurnEntity = null;
+    }
+
+
+
+
     private void OnDestroy()
     {
         // Clean up references to prevent memory leaks if needed

@@ -22,6 +22,8 @@ MonoBehaviour:
   attackModifier: 0
   defenseModifier: 0
   magicModifier: 0
-  linkedAbility: {fileID: 11400000, guid: 6512ec4da27542b47867c4c43d3f08a5, type: 2}
+  linkedAbilities:
+  - {fileID: 11400000, guid: 6512ec4da27542b47867c4c43d3f08a5, type: 2}
   equipSlot: 0
+  equipmentEffectSources: []
   modelPrefab: {fileID: 7235997375035445226, guid: 4d79d2118e8a7f4408474b447ee395f8, type: 3}
