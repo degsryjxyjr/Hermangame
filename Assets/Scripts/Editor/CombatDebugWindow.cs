@@ -1,33 +1,38 @@
-// File: Scripts/Editor/PlayerDataDebugWindow.cs
+// File: Scripts/Editor/PlayerCombatDebugWindow.cs
 #if UNITY_EDITOR
 using UnityEditor;
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq; // Make sure this is included
 
-public class CombatDebugWindow : EditorWindow
+public class PlayerCombatDebugWindow : EditorWindow
 {
-    [MenuItem("Window/Combat Debugger")]
+    [MenuItem("Window/Player Combat Debugger")]
     public static void ShowWindow()
     {
-        GetWindow<CombatDebugWindow>("Player Combat View");
+        GetWindow<PlayerCombatDebugWindow>("Player Combat View");
     }
+
     private Vector2 scrollPos;
     private bool combatSimFoldout = false;
-    private bool enemyListFoldout = false; // Foldout for enemy list
+    private bool enemyListFoldout = false;
 
-    // --- Combat Simulation State ---
+    // --- NEW: Mode Toggle ---
+    private enum SimulationMode { DirectExecution, CombatService }
+    private SimulationMode currentMode = SimulationMode.DirectExecution; // Default to Direct for easy testing
+    // --- END NEW ---
+
+    // --- Combat Simulation State (Used by both modes, but executed differently) ---
     private string selectedCasterPlayerId = "";
-    private string selectedAbilityId = "";
-    private string selectedTargetId = ""; // Can be Player NetworkId or Enemy InstanceId (as string)
+    private string selectedAbilityId = ""; // Now stores the Asset Name (e.g., FireBallAbility)
+    private string selectedTargetId = ""; // Stores the lookup key (e.g., "Player: Name (ID)" or "Enemy: Name (12345)")
     private List<AbilityDefinition> availableAbilitiesCache = new List<AbilityDefinition>();
-    private List<string> targetOptionsCache = new List<string>(); // Stores formatted strings like "Player: Name (ID)" or "Enemy: Goblin (12345)"
-    private Dictionary<string, object> targetLookupCache = new Dictionary<string, object>(); // Maps formatted string to actual PlayerConnection or EnemyEntity instance
+    private List<string> targetOptionsCache = new List<string>();
+    private Dictionary<string, object> targetLookupCache = new Dictionary<string, object>(); // Key: display string, Value: PlayerConnection or EnemyEntity
     // --- End Combat Simulation State ---
 
     void OnEnable()
     {
-        // Populate caches when window opens
         PopulateAbilityCache();
     }
 
@@ -41,7 +46,7 @@ public class CombatDebugWindow : EditorWindow
 
         scrollPos = EditorGUILayout.BeginScrollView(scrollPos);
         var playerManager = PlayerManager.Instance;
-        var combatService = CombatService.Instance; // Get reference
+        var combatService = CombatService.Instance;
 
         if (playerManager == null)
         {
@@ -52,9 +57,21 @@ public class CombatDebugWindow : EditorWindow
 
         var players = playerManager.GetAllPlayers();
 
+        // --- NEW: Mode Selection ---
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Simulation Mode", EditorStyles.boldLabel);
+        currentMode = (SimulationMode)EditorGUILayout.EnumPopup("Mode", currentMode);
+        EditorGUILayout.HelpBox(
+            currentMode == SimulationMode.DirectExecution ?
+            "Directly calls AbilityExecutionService. Bypasses CombatService, turn checks, and action limits. Good for testing ability effects." :
+            "Calls CombatService.ProcessPlayerCombatAction. Respects turn order, action limits, and advances turns. Simulates client message flow.",
+            MessageType.Info
+        );
+        // --- END NEW ---
+
         // --- Combat Simulation Section ---
         EditorGUILayout.Space();
-        combatSimFoldout = EditorGUILayout.Foldout(combatSimFoldout, "Combat Simulation (Direct Ability Calls)", true);
+        combatSimFoldout = EditorGUILayout.Foldout(combatSimFoldout, "Combat Simulation", true);
         if (combatSimFoldout)
         {
             EditorGUI.indentLevel++;
@@ -77,7 +94,6 @@ public class CombatDebugWindow : EditorWindow
         EditorGUILayout.EndScrollView();
     }
 
-
     // --- Combat Simulation Drawing Logic ---
     private void DrawCombatSimulation(List<PlayerConnection> players, CombatService combatService)
     {
@@ -87,10 +103,14 @@ public class CombatDebugWindow : EditorWindow
             return;
         }
 
-        // Ensure caches are populated
         if (availableAbilitiesCache.Count == 0) PopulateAbilityCache();
 
-        EditorGUILayout.LabelField("Simulate Direct Ability Calls (Bypasses Client)", EditorStyles.miniBoldLabel);
+        EditorGUILayout.LabelField(
+            currentMode == SimulationMode.DirectExecution ?
+            "Simulate Ability Execution (Direct Call)" :
+            "Simulate Client Message (CombatService)",
+            EditorStyles.miniBoldLabel
+        );
 
         // --- 1. Select Caster Player ---
         EditorGUILayout.Space();
@@ -106,7 +126,7 @@ public class CombatDebugWindow : EditorWindow
             }
         }
         int currentCasterIndex = playerIds.IndexOf(selectedCasterPlayerId);
-        if (currentCasterIndex == -1) currentCasterIndex = 0; // Default to "None"
+        if (currentCasterIndex == -1) currentCasterIndex = 0;
         int newCasterIndex = EditorGUILayout.Popup("Caster Player", currentCasterIndex, playerOptions.ToArray());
         if (newCasterIndex >= 0 && newCasterIndex < playerIds.Count)
         {
@@ -117,19 +137,18 @@ public class CombatDebugWindow : EditorWindow
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("2. Select Ability:", EditorStyles.boldLabel);
         List<string> abilityOptions = new List<string> { "None" };
-        List<string> abilityIds = new List<string> { "" };
+        List<string> abilityIds = new List<string> { "" }; // Stores Asset Names
         foreach (var abil in availableAbilitiesCache)
         {
             if (abil != null)
             {
-                // Use the ScriptableObject's name (filename without .asset) for loading
-                string assetName = abil.name; // e.g., "FireBallAbility"
-                abilityOptions.Add($"{abil.abilityName} ({assetName})"); // Show both name and asset name for clarity
-                abilityIds.Add(assetName); // Store the asset name for Resources.Load
+                string assetName = abil.name; // Use asset name for Resources.Load
+                abilityOptions.Add($"{abil.abilityName} ({assetName})");
+                abilityIds.Add(assetName);
             }
         }
         int currentAbilityIndex = abilityIds.IndexOf(selectedAbilityId);
-        if (currentAbilityIndex == -1) currentAbilityIndex = 0; // Default to "None"
+        if (currentAbilityIndex == -1) currentAbilityIndex = 0;
         int newAbilityIndex = EditorGUILayout.Popup("Ability", currentAbilityIndex, abilityOptions.ToArray());
         if (newAbilityIndex >= 0 && newAbilityIndex < abilityIds.Count)
         {
@@ -139,28 +158,35 @@ public class CombatDebugWindow : EditorWindow
         // --- 3. Select Target ---
         EditorGUILayout.Space();
         EditorGUILayout.LabelField("3. Select Target (Player or Enemy):", EditorStyles.boldLabel);
-        // Populate target cache if needed
         PopulateTargetCache(players, combatService);
         List<string> targetDisplayOptions = new List<string> { "None" };
         targetDisplayOptions.AddRange(targetOptionsCache);
-        int currentTargetIndex = targetOptionsCache.IndexOf(selectedTargetId) + 1; // +1 because "None" is index 0
-        if (currentTargetIndex == 0) currentTargetIndex = 0; // Default to "None"
+        int currentTargetIndex = targetOptionsCache.IndexOf(selectedTargetId) + 1;
+        if (currentTargetIndex == 0) currentTargetIndex = 0;
         int newTargetIndex = EditorGUILayout.Popup("Target", currentTargetIndex, targetDisplayOptions.ToArray());
-        if (newTargetIndex > 0 && newTargetIndex <= targetOptionsCache.Count) // Adjust for "None" offset
+        if (newTargetIndex > 0 && newTargetIndex <= targetOptionsCache.Count)
         {
-            selectedTargetId = targetOptionsCache[newTargetIndex - 1]; // Subtract 1 for "None" offset
+            selectedTargetId = targetOptionsCache[newTargetIndex - 1];
         }
         else
         {
-            selectedTargetId = ""; // "None" selected
+            selectedTargetId = "";
         }
 
         // --- 4. Execute Button ---
         EditorGUILayout.Space();
         EditorGUI.BeginDisabledGroup(string.IsNullOrEmpty(selectedCasterPlayerId) || string.IsNullOrEmpty(selectedAbilityId) || string.IsNullOrEmpty(selectedTargetId));
-        if (GUILayout.Button("Execute Ability", GUILayout.Height(30)))
+        string buttonLabel = currentMode == SimulationMode.DirectExecution ? "Execute Ability (Direct)" : "Send Action to CombatService";
+        if (GUILayout.Button(buttonLabel, GUILayout.Height(30)))
         {
-            ExecuteSimulatedAbility(combatService);
+            if (currentMode == SimulationMode.DirectExecution)
+            {
+                ExecuteAbilityDirectly(combatService);
+            }
+            else // CombatService Mode
+            {
+                SimulateClientMessage(combatService);
+            }
         }
         EditorGUI.EndDisabledGroup();
         EditorGUILayout.Space();
@@ -169,12 +195,11 @@ public class CombatDebugWindow : EditorWindow
     private void PopulateAbilityCache()
     {
         availableAbilitiesCache.Clear();
-        // Load all abilities from Resources (adjust path as needed)
         AbilityDefinition[] allAbilities = Resources.LoadAll<AbilityDefinition>("Abilities");
         if (allAbilities != null)
         {
             availableAbilitiesCache.AddRange(allAbilities);
-            Debug.Log($"PlayerDataDebugWindow: Populated ability cache with {allAbilities.Length} abilities.");
+            Debug.Log($"PlayerCombatDebugWindow: Populated ability cache with {allAbilities.Length} abilities.");
         }
     }
 
@@ -182,17 +207,15 @@ public class CombatDebugWindow : EditorWindow
     {
         targetOptionsCache.Clear();
         targetLookupCache.Clear();
-        // Add Players
         foreach (var player in players)
         {
             if (player != null)
             {
                 string playerKey = $"Player: {player.LobbyData?.Name ?? "Unknown"} ({player.NetworkId})";
                 targetOptionsCache.Add(playerKey);
-                targetLookupCache[playerKey] = player; // Store PlayerConnection instance
+                targetLookupCache[playerKey] = player;
             }
         }
-        // Add Enemies (if in combat and EncounterManager exists)
         if (combatService != null)
         {
             var encounterManager = combatService.GetEncounterManager();
@@ -203,92 +226,120 @@ public class CombatDebugWindow : EditorWindow
                 {
                     if (enemy != null)
                     {
-                        // Use InstanceID as a unique identifier for the enemy instance in the scene
                         string enemyKey = $"Enemy: {enemy.GetEntityName() ?? "Unknown Enemy"} (ID: {enemy.GetInstanceID()})";
                         targetOptionsCache.Add(enemyKey);
-                        targetLookupCache[enemyKey] = enemy; // Store EnemyEntity instance
+                        targetLookupCache[enemyKey] = enemy;
                     }
                 }
             }
         }
     }
 
-    private void ExecuteSimulatedAbility(CombatService combatService)
+    // --- NEW: Direct Execution Method ---
+    private void ExecuteAbilityDirectly(CombatService combatService)
     {
-        if (combatService == null)
-        {
-            Debug.LogError("PlayerDataDebugWindow: Cannot execute ability, CombatService is null.");
-            return;
-        }
-        if (string.IsNullOrEmpty(selectedCasterPlayerId) || string.IsNullOrEmpty(selectedAbilityId) || string.IsNullOrEmpty(selectedTargetId))
-        {
-            Debug.LogWarning("PlayerDataDebugWindow: Cannot execute ability, caster, ability, or target is not selected.");
-            return;
-        }
+        Debug.Log("PlayerCombatDebugWindow: Executing ability directly via AbilityExecutionService.");
 
         // 1. Resolve Caster
         var casterPlayer = PlayerManager.Instance.GetPlayer(selectedCasterPlayerId);
         if (casterPlayer == null)
         {
-            Debug.LogError($"PlayerDataDebugWindow: Cannot execute ability, caster player '{selectedCasterPlayerId}' not found.");
+            Debug.LogError($"PlayerCombatDebugWindow: Cannot execute ability, caster player '{selectedCasterPlayerId}' not found.");
             return;
         }
 
         // 2. Resolve Ability
-        // Load the ability definition (using Resources.Load for prototype, as done in cache)
         AbilityDefinition abilityDef = Resources.Load<AbilityDefinition>($"Abilities/{selectedAbilityId}");
         if (abilityDef == null)
         {
-            Debug.LogError($"PlayerDataDebugWindow: Cannot execute ability, AbilityDefinition '{selectedAbilityId}' not found in Resources/Abilities.");
+            Debug.LogError($"PlayerCombatDebugWindow: Cannot execute ability, AbilityDefinition '{selectedAbilityId}' not found.");
             return;
         }
 
         // 3. Resolve Target
-        if (!targetLookupCache.TryGetValue(selectedTargetId, out var targetObject))
+        if (!targetLookupCache.TryGetValue(selectedTargetId, out var targetObject) || !(targetObject is IDamageable damageableTarget))
         {
-            Debug.LogError($"PlayerDataDebugWindow: Cannot execute ability, target '{selectedTargetId}' not found in lookup cache.");
+            Debug.LogError($"PlayerCombatDebugWindow: Cannot execute ability, target '{selectedTargetId}' not found or not damageable.");
             return;
         }
-        List<IDamageable> resolvedTargets = new List<IDamageable>();
-        if (targetObject is IDamageable damageableTarget)
-        {
-            resolvedTargets.Add(damageableTarget);
-        }
-        else
-        {
-            Debug.LogError($"PlayerDataDebugWindow: Selected target '{selectedTargetId}' does not implement IDamageable.");
-            return;
-        }
+        List<IDamageable> targets = new List<IDamageable> { damageableTarget };
 
-        // 4. Determine Context (Assume InCombat for simulation)
-        AbilityExecutionService.AbilityContext context = AbilityExecutionService.AbilityContext.InCombat;
+        var useContext = GameStateManager.Instance.GetCurrentGameState() == GameStateManager.GameState.Combat 
+            ? AbilityExecutionService.AbilityContext.InCombat 
+            : AbilityExecutionService.AbilityContext.OutOfCombat;
 
-        // 5. Call AbilityExecutionService directly
-        Debug.Log($"PlayerDataDebugWindow: Simulating ability execution:\n" +
-                  $"  Caster: {casterPlayer.LobbyData?.Name ?? "Unknown"} ({casterPlayer.NetworkId})\n" +
-                  $"  Ability: {abilityDef.abilityName}\n" +
-                  $"  Target: {selectedTargetId}\n" +
-                  $"  Context: {context}");
-
+        // 4. Call AbilityExecutionService directly (Bypasses all combat rules)
         bool success = AbilityExecutionService.Instance.ExecuteAbility(
             caster: casterPlayer,
-            targets: resolvedTargets,
+            targets: targets,
             abilityDefinition: abilityDef,
-            context: context
+            context: useContext
         );
 
         if (success)
         {
-            Debug.Log($"PlayerDataDebugWindow: Simulated ability '{abilityDef.abilityName}' executed successfully.");
-            // Optionally, manually advance turn
-            // combatService.AdvanceTurn();
+            Debug.Log($"PlayerCombatDebugWindow: Direct execution of '{abilityDef.abilityName}' succeeded.");
         }
         else
         {
-            Debug.LogWarning($"PlayerDataDebugWindow: Simulated ability '{abilityDef.abilityName}' failed to execute.");
+            Debug.LogWarning($"PlayerCombatDebugWindow: Direct execution of '{abilityDef.abilityName}' failed.");
         }
     }
-    // --- END Combat Simulation Drawing Logic ---
+    // --- END NEW: Direct Execution Method ---
+
+    // --- NEW: Simulate Client Message Method ---
+    private void SimulateClientMessage(CombatService combatService)
+    {
+        Debug.Log("PlayerCombatDebugWindow: Simulating client message to CombatService.");
+
+        // 1. Validate selections (basic check)
+        if (string.IsNullOrEmpty(selectedCasterPlayerId) || string.IsNullOrEmpty(selectedAbilityId) || string.IsNullOrEmpty(selectedTargetId))
+        {
+            Debug.LogWarning("PlayerCombatDebugWindow: Cannot simulate message, caster, ability, or target is not selected.");
+            return;
+        }
+
+        // 2. Resolve Target *Specifier* (what the client would send)
+        // The client typically sends a simple identifier.
+        // For players: NetworkId
+        // For enemies: InstanceID (as string) or a custom ID assigned by the server
+        string targetSpecifier = null;
+        if (targetLookupCache.TryGetValue(selectedTargetId, out var targetObj))
+        {
+            if (targetObj is PlayerConnection targetPlayer)
+            {
+                targetSpecifier = targetPlayer.NetworkId;
+            }
+            else if (targetObj is EnemyEntity targetEnemy)
+            {
+                targetSpecifier = targetEnemy.GetInstanceID().ToString(); // Use InstanceID string
+                // Alternative: If EncounterManager assigns unique enemy IDs, use that.
+            }
+        }
+
+        if (string.IsNullOrEmpty(targetSpecifier))
+        {
+            Debug.LogError($"PlayerCombatDebugWindow: Could not determine target specifier for '{selectedTargetId}'.");
+            return;
+        }
+
+        // 3. Construct the message data (Dictionary mimicking JSON)
+        // This structure should match what your real frontend sends.
+        var actionData = new Dictionary<string, object>
+        {
+            { "type", "use_ability" }, // Standard action type
+            { "abilityId", selectedAbilityId }, // Send the Asset Name used for Resources.Load
+            { "target", targetSpecifier } // Send the resolved specifier
+            // Add other fields if your protocol requires them (e.g., context if not implied)
+        };
+
+        // 4. Call CombatService.ProcessPlayerCombatAction
+        // This is the core of simulating the client-server flow.
+        combatService.ProcessPlayerCombatAction(selectedCasterPlayerId, actionData);
+
+        Debug.Log($"PlayerCombatDebugWindow: Simulated message sent for player '{selectedCasterPlayerId}' using ability '{selectedAbilityId}' on target '{targetSpecifier}'.");
+    }
+    // --- END NEW: Simulate Client Message Method ---
 
 
     // --- Enemy List Drawing Logic ---
@@ -303,8 +354,8 @@ public class CombatDebugWindow : EditorWindow
         var encounterManager = combatService.GetEncounterManager();
         if (encounterManager == null)
         {
-             EditorGUILayout.HelpBox("EncounterManager not found.", MessageType.Info);
-             return;
+            EditorGUILayout.HelpBox("EncounterManager not found.", MessageType.Info);
+            return;
         }
 
         var activeEnemies = encounterManager.GetActiveEnemies();
@@ -329,7 +380,21 @@ public class CombatDebugWindow : EditorWindow
                 EditorGUILayout.LabelField($"Defense:", enemy.Defense.ToString());
                 EditorGUILayout.LabelField($"Magic:", enemy.Magic.ToString());
                 EditorGUILayout.LabelField($"Is Alive:", enemy.IsAlive().ToString());
-                // Add more stats as needed from EnemyEntity or EnemyDefinition
+
+                // --- NEW: Display Enemy Action Budget ---
+                if (enemy is IActionBudget enemyActionBudget)
+                {
+                    EditorGUILayout.LabelField("Action Budget:", EditorStyles.miniBoldLabel);
+                    EditorGUI.indentLevel++;
+                    EditorGUILayout.LabelField($"Actions: {enemyActionBudget.TotalActions} (Remaining: {enemyActionBudget.ActionsRemaining})");
+                    EditorGUI.indentLevel--;
+                }
+                else
+                {
+                    EditorGUILayout.LabelField("Action Budget: Not Implemented", EditorStyles.miniLabel);
+                }
+                // --- END NEW ---
+
                 EditorGUILayout.EndVertical();
                 EditorGUILayout.Space();
             }

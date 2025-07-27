@@ -193,7 +193,7 @@ public class CombatService : MonoBehaviour
     private void OnTurnStarted_Internal(object turnEntity)
     {
         Debug.Log($"CombatService: Received OnTurnStarted for {GetEntityNameSafe(turnEntity)}.");
-        
+
         if (_encounterManager == null || turnEntity == null)
         {
             Debug.LogError("CombatService: OnTurnStarted_Internal called but _encounterManager or turnEntity is null!");
@@ -202,25 +202,41 @@ public class CombatService : MonoBehaviour
 
         string entityId = null;
         string entityType = null;
+        string entityName = null;
 
         // Determine the ID and type of the entity whose turn it is
         if (turnEntity is PlayerConnection player)
         {
             entityId = player.NetworkId;
             entityType = "player";
+            entityName = GetEntityNameSafe(turnEntity);
+            SendTurnStartData(entityId, entityType, entityName);
         }
         else if (turnEntity is EnemyEntity enemy)
         {
             entityId = enemy.GetInstanceID().ToString(); // Or a unique ID from EncounterManager
             entityType = "enemy";
-        }
+            entityName = GetEntityNameSafe(turnEntity);
+            // Sending turn start to players here. Only then actually starting the AI turn
+            SendTurnStartData(entityId, entityType, entityName);
 
+            // This is where the enemy's AI decision-making process is triggered.
+            TriggerEnemyAI(enemy);
+        }
+        else
+        {
+            Debug.LogError($"CombatService: Unknown turn entity type: {turnEntity.GetType()}");
+        }
+    }
+
+
+    private void SendTurnStartData(string entityId, string entityType, string entityName)
+    {
         if (string.IsNullOrEmpty(entityId))
         {
             Debug.LogError("CombatService: Could not determine entity ID for turn start message.");
             return;
         }
-
         // --- Prepare Turn Start Data ---
         var turnData = new Dictionary<string, object>
         {
@@ -229,9 +245,9 @@ public class CombatService : MonoBehaviour
             {
                 id = entityId,
                 type = entityType,
-                name = GetEntityNameSafe(turnEntity)
+                name = entityName
             },
-            ["message"] = $"{GetEntityNameSafe(turnEntity)}'s turn begins!"
+            ["message"] = $"{entityName}'s turn begins!"
         };
         // --- End Prepare Data ---
 
@@ -242,10 +258,11 @@ public class CombatService : MonoBehaviour
             if (p != null)
             {
                 GameServer.Instance.SendToPlayer(p.NetworkId, turnData);
-                Debug.Log($"CombatService: Sent 'turn_start' message for {entityType} {GetEntityNameSafe(turnEntity)} to player {p.LobbyData?.Name ?? p.NetworkId}");
+                Debug.Log($"CombatService: Sent 'turn_start' message for {entityType} {entityName} to player {p.LobbyData?.Name ?? p.NetworkId}");
             }
         }
     }
+
 
     private void OnPlayerAdded_Internal(PlayerConnection player)
     {
@@ -380,7 +397,9 @@ public class CombatService : MonoBehaviour
 
             // TODO: Implement actual enemy action execution.
             // This requires resolving the caster issue mentioned above.
-            // Pseudo-code:
+            chosenTarget.TakeDamage(10, DamageType.Physical);
+            _encounterManager.AdvanceTurn();
+
             // bool success = AbilityExecutionService.Instance.ExecuteAbility(/* enemy as caster */, targets, chosenAbility, AbilityExecutionService.AbilityContext.InCombat);
             // if (success)
             // {
