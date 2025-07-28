@@ -523,18 +523,25 @@
                     updateStatsDisplay();
                     break;
                     // <-- End of stats_update case -->
-
                 case "encounter_start":
-                    if (isInCombat) {
-                        currentCombatState = msg; // Store the full encounter data
-                        logCombatMessage(msg.message, "system");
-                        updatePlayerListCombat(msg.players);
-                        updateEnemyListCombat(msg.enemies);
-                        // Highlight initial turn entity if included or wait for turn_start
-                        if (msg.turnOrder && msg.turnOrder.length > 0) {
-                            // Maybe highlight the first entity or wait for turn_start
-                            // highlightCurrentTurnEntity(msg.turnOrder[0]); // Example
-                        }
+                    // This message contains the initial data to populate the combat view
+                    if (msg.status === 'active') {
+                        // Store the initial state if needed for later reference
+                        currentCombatState = {
+                            players: msg.players,
+                            enemies: msg.enemies,
+                            turnOrder: msg.turnOrder
+                            // Add other relevant top-level data from encounter_start if needed
+                        };
+
+                        // Crucially, call updateCombatView with the data from encounter_start
+                        // This should populate the player/enemy lists and initial state
+                        updateCombatView(msg); // <-- This is the key call
+
+                        logDebug(msg.message || "Encounter started!", 'info');
+                    } else {
+                        // Handle other statuses like 'victory', 'defeat' if they come through this message
+                        logDebug(`Encounter start message received with status: ${msg.status}`, 'warning');
                     }
                     break;
 
@@ -545,87 +552,31 @@
                     // Maybe show a victory/defeat message or automatically transition?
                     break;
 
-                // Inside the main message switch statement
-                case "turn_start":
-                    if (isInCombat && currentCombatState) {
-                        logCombatMessage(msg.message, "system");
-                        highlightCurrentTurnEntity(msg.entity); // Implement this function
+                case 'turn_start':
+                    // This message indicates whose turn it is
+                    // Update the stored state and highlight the current entity
+                    if (!currentCombatState) {
+                        console.error("Received 'turn_start' but currentCombatState is not initialized.");
+                        currentCombatState = {}; // Initialize to prevent further errors, but state might be inconsistent
+                    }
+                    currentCombatState.currentTurnEntity = msg.entity; // Store the current entity info
 
-                        const availableActionsDiv = document.getElementById('availableActions');
-                        if (availableActionsDiv) {
-                            availableActionsDiv.innerHTML = ''; // Clear previous actions
+                    // Highlight the entity whose turn it is (e.g., add a CSS class)
+                    highlightCurrentTurnEntity(msg.entity); // You already have this function
 
-                            // Check if it's the CURRENT PLAYER'S turn
-                            if (msg.entity.type === "player" && msg.entity.id === currentPlayerId) {
-                                logDebug("It's my turn! Enabling actions.");
-
-                                // --- Add Action Buttons ---
-                                // 1. Basic Attack
-                                const attackBtn = document.createElement('button');
-                                attackBtn.className = 'combat-action-btn';
-                                attackBtn.textContent = 'Melee Attack';
-                                attackBtn.onclick = () => sendCombatAction('melee_attack', {}); // Requires target selection
-                                availableActionsDiv.appendChild(attackBtn);
-
-                                // 2. Defend (Example)
-                                const defendBtn = document.createElement('button');
-                                defendBtn.className = 'combat-action-btn';
-                                defendBtn.textContent = 'Defend';
-                                defendBtn.onclick = () => sendCombatAction('defend', {});
-                                availableActionsDiv.appendChild(defendBtn);
-
-                                // 3. Use Item (Potions) - Requires inventory data and target selection
-                                // Iterate through inventoryData (assuming it's updated) to find usable items
-                                if (Array.isArray(inventoryData)) {
-                                    inventoryData.forEach(item => {
-                                        // Assuming item has properties like type, isConsumable, etc.
-                                        if (item.isConsumable) { // Define your criteria
-                                            const useItemBtn = document.createElement('button');
-                                            useItemBtn.className = 'combat-action-btn';
-                                            useItemBtn.textContent = `Use ${item.name}`;
-                                            useItemBtn.dataset.itemId = item.id; // Store item ID
-                                            useItemBtn.onclick = () => {
-                                                // Example: Simple use on self, or prompt for target
-                                                // For simplicity, assume self-target or add target selection logic
-                                                sendCombatAction('use_item', { itemId: item.id /*, targetId: currentPlayerId */ });
-                                            };
-                                            availableActionsDiv.appendChild(useItemBtn);
-                                        }
-                                    });
-                                }
-
-                                // 4. Use Ability (Magic/Spells) - Requires player abilities data
-                                // You'd need to track player abilities (sent by server?) and create buttons similarly.
-                                // Example (assuming playerStats has an 'abilities' array sent by server):
-                                // if (Array.isArray(playerStats.abilities)) {
-                                //   playerStats.abilities.forEach(ability => {
-                                //     const useAbilityBtn = document.createElement('button');
-                                //     useAbilityBtn.className = 'combat-action-btn';
-                                //     useAbilityBtn.textContent = ability.name;
-                                //     useAbilityBtn.dataset.abilityId = ability.id;
-                                //     useAbilityBtn.onclick = () => sendCombatAction('use_ability', { abilityId: ability.id /*, targetId: ... */ });
-                                //     availableActionsDiv.appendChild(useAbilityBtn);
-                                //   });
-                                // }
-
-                                // --- Target Selection ---
-                                // You will likely need logic to let the player *select* a target
-                                // (player or enemy) after clicking an action like Attack or Use Item.
-                                // This could involve:
-                                // - Adding a "Select Target" message to the log.
-                                // - Adding click handlers to player/enemy entries in their lists.
-                                // - Storing the selected target ID.
-                                // - Modifying sendCombatAction to include the targetId.
-                                // For now, actions like melee_attack will need target selection logic.
-                                logDebug("Please select a target for your action.");
-
-                            } else {
-                                logDebug(`It's ${msg.entity.name}'s turn (${msg.entity.type}).`);
-                                // Optionally disable action buttons or show a "Wait for your turn" message
-                                // inside availableActionsDiv
-                            }
+                    // Optional: Update action buttons if it's the local player's turn
+                    // This might also be handled inside highlightCurrentTurnEntity
+                    if (msg.entity.type === 'player' && msg.entity.id === currentPlayerId) {
+                        updateActionButtons(msg.entity.name); // Enable actions for the player
+                    } else {
+                        // Disable actions or show waiting message for other turns
+                        const actionContainer = document.getElementById('availableActions');
+                        if (actionContainer) {
+                            actionContainer.innerHTML = '<div class="log-entry info">Waiting for other turns...</div>';
                         }
                     }
+
+                    logDebug(msg.message || `${msg.entity.name}'s turn begins!`, 'info');
                     break;
 
                 case 'stats_update':
@@ -693,6 +644,8 @@
         }
 
         function updateCombatView(data) {
+            console.log("Updating combat view with ", data); // Add this for debugging
+
             // This function updates the entire combat panel or parts of it based on data received
             if (data.players) {
                 updatePlayerListCombat(data.players);
@@ -980,8 +933,10 @@
             const targetId = targetElement.dataset.entityId;
             selectedTarget = { type: targetType, id: targetId };
 
+            
+
             // Add target to action details
-            const actionDetailsWithTarget = { ...selectedAction.details, targetId: targetId, targetType: targetType };
+            const actionDetailsWithTarget = { ...selectedAction.details, target: targetId};
 
             // Send the complete action
             sendCombatAction(selectedAction.type, actionDetailsWithTarget);
@@ -1005,8 +960,7 @@
                 return;
             }
             const actionMessage = {
-                type: "combat_action", // Message type for PlayerManager->CombatService
-                action_type: actionType, // e.g., "melee_attack", "use_ability", "use_item"
+                type: actionType, // Message type for PlayerManager->CombatService e.g., "melee_attack", "use_ability", "use_item"
                 ...details // e.g., { abilityId: "fireball", target: "enemy_1" } or { itemId: "health_potion_01" }
             };
             sendMessage(actionMessage);

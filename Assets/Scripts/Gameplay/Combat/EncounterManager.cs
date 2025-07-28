@@ -106,7 +106,7 @@ public class EncounterManager : MonoBehaviour
                 AddPlayer(player);
             }
         }
-
+        CombatService.Instance.StartCombat(players);
         // 2. Spawn and Add Enemies
         foreach (var enemyDef in enemyDefinitions)
         {
@@ -382,8 +382,8 @@ public class EncounterManager : MonoBehaviour
 
     public string GetCurrentTurnEntityName()
     {
-        if (_currentTurnEntity is IEntity entity) return entity.GetEntityName();
-        if (_currentTurnEntity is PlayerConnection player) return player.LobbyData?.Name ?? player.NetworkId;
+        if (_currentTurnEntity is EnemyEntity enemy) return enemy.GetEntityName();
+        if (_currentTurnEntity is PlayerConnection player) return player.NetworkId;
         return "Unknown Entity";
     }
 

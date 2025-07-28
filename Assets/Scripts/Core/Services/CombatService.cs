@@ -665,24 +665,25 @@ public class CombatService : MonoBehaviour
     {
         // --- CORRECTED: Use player.NetworkId instead of player.SessionId ---
         string playerId = player.NetworkId;
-
+        string currentTurnEnemyName = _encounterManager.GetCurrentTurnEntityName();
         // Route combat-specific messages
-        if (_isInCombat && playerId == _encounterManager.GetCurrentTurnEntityName())
+        if (_isInCombat && playerId == currentTurnEnemyName)
         {
             // It's this player's turn, process their combat action
             ProcessPlayerCombatAction(playerId, msg);
         }
         else if (_isInCombat)
         {
-             // It's combat, but not this player's turn
-             Debug.Log($"Received combat message from {playerId}, but it's not their turn ({_encounterManager.GetCurrentTurnEntityName()}).");
-             // TODO: Send error message to client
+            // It's combat, but not this player's turn
+            Debug.Log($"Received combat message from {playerId}, but it's not their turn. Turn is {currentTurnEnemyName}'s.");
+            // TODO: Send error message to client
         }
         else
         {
             // Not in combat, ignore or handle differently?
             Debug.Log($"Received combat message from {playerId}, but not in combat.");
-             // TODO: Send error message to client or ignore
+            Debug.Log($"IsIncombat: {_isInCombat}. Current turn entity name {currentTurnEnemyName}");
+            // TODO: Send error message to client or ignore
         }
     }
     // --- End Message Handling ---
