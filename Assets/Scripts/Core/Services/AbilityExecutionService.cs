@@ -43,7 +43,7 @@ public class AbilityExecutionService : MonoBehaviour
     /// <param name="abilityDefinition">The ability to execute.</param>
     /// <param name="context">The context in which the ability is being used.</param>
     /// <returns>True if executed successfully, false otherwise.</returns>
-    public bool ExecuteAbility(IEntity caster, List<IDamageable> targets, AbilityDefinition abilityDefinition, AbilityContext context)
+    public bool ExecuteAbility(IEntity caster, List<IDamageable> targets, AbilityDefinition abilityDefinition, AbilityContext context, bool isFromItem = false)
     {
 
         // --- Validation ---
@@ -93,8 +93,10 @@ public class AbilityExecutionService : MonoBehaviour
 
         // --- Ability Ownership Validation ---
         // Skip this check if the ability is being executed from an item
-        bool isFromItem = context == AbilityContext.OutOfCombat && 
-                        abilityDefinition.IsItemAbility();
+
+        //OLD WAY!! DOESNT ALLOW HEALTHPOTIONS IN COMBAT!!!
+        //bool isFromItem = context == AbilityContext.OutOfCombat && 
+        //                abilityDefinition.IsItemAbility();
 
         if (!isFromItem)
         {
@@ -227,7 +229,9 @@ public class AbilityExecutionService : MonoBehaviour
     {
         // The target is usually predetermined (often self) by the item's design.
         List<IDamageable> targets = new List<IDamageable> { target };
-        return ExecuteAbility(caster, targets, abilityDefinition, context);
+        // When using items we set ifFromItem so the player doesnt need to have the ability themselves
+        bool isFromItem = true;
+        return ExecuteAbility(caster, targets, abilityDefinition, context, isFromItem);
     }
 
     // --- Placeholder Methods for Future Expansion ---

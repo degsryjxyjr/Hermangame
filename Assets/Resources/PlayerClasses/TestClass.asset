@@ -16,9 +16,9 @@ MonoBehaviour:
   classIcon: {fileID: 10901, guid: 0000000000000000f000000000000000, type: 0}
   description: test class
   baseHealth: 100
-  baseAttack: 5
-  baseDefense: 2
-  baseMagic: 2
+  baseAttack: 0
+  baseDefense: 0
+  baseMagic: 0
   attackRange: 1
   baseActions: 2
   characterPrefab: {fileID: 7235997375035445226, guid: 487c0c6d42be8b14485c3bb804d3bc62, type: 3}
