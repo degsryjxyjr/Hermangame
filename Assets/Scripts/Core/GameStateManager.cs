@@ -69,6 +69,13 @@ public class GameStateManager : MonoBehaviour
 
         // Handle scene transitions
         string targetScene = GetSceneForState(newState);
+        // Notify all clients that the state and scene are ready
+        GameServer.Instance?.Broadcast(new
+        {
+            type = "game_state_change",
+            state = CurrentState.ToString(),
+            scene = targetScene // Confirm the loaded scene name
+        });
         if (!string.IsNullOrEmpty(targetScene))
         {
             if (SceneManager.GetActiveScene().name != targetScene || forceReload)
@@ -115,13 +122,7 @@ public class GameStateManager : MonoBehaviour
             // Now that the scene is loaded, perform any state entry logic that depends on it
             OnStateEnter(CurrentState); 
 
-            // Notify all clients that the state and scene are ready
-            GameServer.Instance?.Broadcast(new
-            {
-                type = "game_state_change",
-                state = CurrentState.ToString(),
-                scene = scene.name // Confirm the loaded scene name
-            });
+
         }
         else if(string.IsNullOrEmpty(expectedSceneForCurrentState))
         {

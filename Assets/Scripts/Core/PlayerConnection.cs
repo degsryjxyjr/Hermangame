@@ -2,7 +2,7 @@
 
 using UnityEngine;
 using System.Collections.Generic;
-
+using System.Linq;
 // --- Interfaces (Ensure these are defined in separate files) ---
 // using Scripts/Core/IEntity.cs
 // using Scripts/Gameplay/Entities/IDamageable.cs
@@ -408,6 +408,34 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
     /// </summary>
     public void SendStatsUpdateToClient()
     {
+
+        // --- Prepare Abilities Data ---
+        var abilitiesList = new System.Collections.Generic.List<object>();
+        foreach (var ability in this.UnlockedAbilities) 
+        {
+            // Safely add ability data, checking for nulls
+            if (ability != null)
+            {
+                abilitiesList.Add(new {
+                    id = ability.name ?? "UnknownAbility", 
+                    name = ability.abilityName ?? ability.name ?? "Unnamed Ability", // Fallback chain
+
+                    // supportedTargetTypes is List<AbilityDefinition.TargetType>
+                    // Select directly converts each TargetType enum value to its string representation
+                    targetTypes = ability.supportedTargetTypes != null ? 
+                                  ability.supportedTargetTypes.Select(t => t.ToString()).ToArray() : 
+                                  new string[] { "Unknown" }, 
+
+                    actionCost = ability.actionCost >= 0 ? ability.actionCost : 1 // Default cost if invalid
+                });
+            }
+            else
+            {
+                 // Log or handle null ability in the list if necessary
+                 Debug.LogWarning("PlayerConnection.SendStatsUpdateToClient: Found null ability in UnlockedAbilities list for player " + this.NetworkId);
+            }
+        }
+
         GameServer.Instance.SendToPlayer(this.NetworkId, new
         {
             type = "stats_update",
@@ -418,8 +446,9 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
             maxHealth = this.MaxHealth,
             attack = this.Attack,
             defense = this.Defense,
-            magic = this.Magic
+            magic = this.Magic,
             // Add other stats as needed
+            abilities = abilitiesList
         });
     }
     // --- End Implementation of IEquipmentEffect ---
