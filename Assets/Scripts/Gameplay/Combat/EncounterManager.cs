@@ -521,6 +521,16 @@ public class EncounterManager : MonoBehaviour
         return false; 
     }
 
+    public int GetActionsRemaining()
+    {
+        if (_currentTurnEntity is IActionBudget actionEntity)
+        {
+            int actions = actionEntity.ActionsRemaining;
+            return actions;
+        }
+        Debug.LogWarning("Couldnt get actions remaining as entiy doesnt implement IActionBudget");
+        return 0; // Not an entity with an action budget
+    }
 
     // --- END: Methods to Record Actions ---
 

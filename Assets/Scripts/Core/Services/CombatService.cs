@@ -426,136 +426,58 @@ public class CombatService : MonoBehaviour
         if (_encounterManager == null || _encounterManager.CurrentState != EncounterManager.EncounterState.Active)
         {
             Debug.LogWarning($"CombatService: Cannot process action, encounter not active.");
-            // TODO: Send error
+            // TODO: Send error message to client
             return;
         }
 
         var currentPlayer = PlayerManager.Instance.GetPlayer(playerId);
-        if (currentPlayer == null || _encounterManager.CurrentTurnEntity != currentPlayer)
+        if (currentPlayer == null)
         {
-            Debug.LogWarning($"CombatService: Player {playerId} tried to act, but it's not their turn ({GetEntityNameSafe(_encounterManager.CurrentTurnEntity)}).");
+            Debug.LogWarning($"CombatService: Player {playerId} not found in PlayerManager.");
             // TODO: Send error
             return;
         }
 
-        Debug.Log($"CombatService: Received combat action from player {playerId}. Action Data: {JsonUtility.ToJson(actionData)}");
-
-        // All actions are MainActions!!! BonusActions are deprecated
-        bool isMainAction = true;
-
-        // --- Check Action Availability using EncounterManager ---
-        bool actionAllowed = true;
-        if (isMainAction && !_encounterManager.IsActionAvailable())
+        if (_encounterManager.CurrentTurnEntity != currentPlayer)
         {
-            actionAllowed = false;
-            Debug.LogWarning($"CombatService: Player {playerId} tried to use an action, but all actions already used this turn.");
-            // TODO: Send specific error to client
+            Debug.LogWarning($"CombatService: Player {playerId} tried to act, but it's not their turn ({GetEntityNameSafe(_encounterManager.CurrentTurnEntity)}).");
+            // TODO: Send error message to client (e.g., "Not your turn")
+            return;
         }
 
-        // --- END Check Action Availability ---
+        Debug.Log($"CombatService: Received combat action from player {playerId}. Action Data: {actionData}");
 
-        if (!actionAllowed)
+        // 2. Parse action type
+        if (!actionData.TryGetValue("type", out var typeObj))
         {
-            return; // Do not process the action further
+            Debug.LogWarning($"CombatService: Action data missing 'type' field for player {playerId}.");
+            // TODO: Send error message to client
+            return;
         }
 
-        // 2. Parse action
-        if (actionData.TryGetValue("type", out var typeObj))
+        string actionType = typeObj.ToString();
+
+        switch (actionType)
         {
-            string actionType = typeObj.ToString();
+            case "use_ability":
+                ProcessUseAbilityAction(playerId, currentPlayer, actionData);
+                break;
 
-            switch (actionType)
-            {
-                case "use_ability":
-                    if (actionData.TryGetValue("abilityId", out var abilityIdObj) &&
-                        actionData.TryGetValue("target", out var targetObj))
-                    {
-                        string abilityId = abilityIdObj.ToString();
-                        string targetSpecifier = targetObj.ToString();
+            case "melee_attack":
+                ProcessMeleeAttackAction(playerId, currentPlayer);
+                break;
 
-                        // 3. Fetch Ability Definition
-                        AbilityDefinition abilityDef = Resources.Load<AbilityDefinition>($"Abilities/{abilityId}");
-                        if (abilityDef == null)
-                        {
-                            Debug.LogError($"CombatService: AbilityDefinition not found: {abilityId}");
-                            // TODO: Send error
-                            // Decide if this consumes an action slot. Let's assume it doesn't if it fails to resolve.
-                            break; // Exit switch case
-                        }
+            case "use_item":
+                ProcessUseItemAction(playerId, actionData);
+                break;
 
-                        // 4. Resolve Target using EncounterManager
-                        IDamageable resolvedTarget = _encounterManager.ResolveTarget(targetSpecifier, currentPlayer);
-                        if (resolvedTarget == null)
-                        {
-                            Debug.LogWarning($"CombatService: Failed to resolve target '{targetSpecifier}' for ability {abilityId}.");
-                            // TODO: Send error
-                            // Decide if this consumes an action slot. Let's assume it doesn't if it fails to resolve.
-                            break; // Exit switch case
-                        }
-
-                        // 5. Delegate to AbilityExecutionService
-                        List<IDamageable> targetList = new List<IDamageable> { resolvedTarget };
-                        bool success = AbilityExecutionService.Instance.ExecuteAbility(
-                            caster: currentPlayer,
-                            targets: targetList,
-                            abilityDefinition: abilityDef,
-                            context: AbilityExecutionService.AbilityContext.InCombat
-                        );
-
-                        // 6. Handle result
-                        if (success)
-                        {
-                            Debug.Log($"CombatService: Ability {abilityId} executed successfully for player {playerId}.");
-                            // --- Record Action Usage on Success ---
-                            if (isMainAction)
-                            {
-                                _encounterManager.RecordActionUsed();
-                            }
-                        }
-                        else
-                        {
-                            Debug.Log($"CombatService: Ability {abilityId} execution failed for player {playerId}.");
-                            // TODO: Send specific error message to client
-                            // Decide if failed action consumes the slot. Often it does.
-                            // Let's assume it does for simplicity.
-                            if (isMainAction)
-                            {
-                                _encounterManager.RecordActionUsed(); // Failed main action still counts as attempted?
-                            }
-                        }
-                    }
-                    break;
-
-                case "melee_attack":
-                    // Handle basic attack
-                    Debug.Log("CombatService: Basic melee attack logic needs full implementation.");
-                    // This could be an ability or direct damage calculation.
-                    // For now, advance turn.
-                    _encounterManager.RecordActionUsed();
-                    break;
-
-                case "use_item":
-                    // Handle item use during combat
-                    // This should ideally be routed back to InventoryService.
-                    // Or, InventoryService.UseItem could be called directly by PlayerManager
-                    // based on the message type, and it knows to use AbilityExecutionService
-                    // with InCombat context if the game state is Combat.
-                    // Let's assume InventoryService handles it correctly now.
-                    if (actionData.TryGetValue("itemId", out var itemIdObj))
-                    {
-                        string itemId = itemIdObj.ToString();
-                        InventoryService.Instance.UseItem(playerId, itemId);
-                    }
-                    _encounterManager.RecordActionUsed();
-                    break;
-
-                default:
-                    Debug.LogWarning($"CombatService: Unknown combat action type: {actionType}");
-                    // TODO: Send error
-                    break;
-            }
+            default:
+                Debug.LogWarning($"CombatService: Unknown combat action type: '{actionType}' from player {playerId}.");
+                // TODO: Send error message to client (e.g., "Unknown action type")
+                break;
         }
-        // --- Check if Current Entity's Turn Should End and Advance if Necessary ---
+
+        // --- Check if Current Entity's Turn Should End ---
         // This check happens AFTER processing the action (successful or not, if slot was consumed)
         if (_encounterManager.AreCurrentEntityActionsExhausted())
         {
@@ -567,12 +489,175 @@ public class CombatService : MonoBehaviour
             // Optionally, send a message to the client confirming the action
             // and informing them how many actions they have left.
             // This would require defining a new message type or adding action data to existing messages.
-            Debug.Log($"CombatService: Player {playerId} action processed. Checking action budget...");
-            // The client would need to query or receive updates on their action budget.
+            Debug.Log($"CombatService: Player {playerId} action processed. Actions remaining: {_encounterManager.GetActionsRemaining()}.");
+            // TODO: Potentially send an update to the client about remaining actions.
         }
-        // --- END NEW ---
+        // --- END Check Turn End ---
     }
     // --- End Player Action Processing ---
+
+
+    // --- Helper Methods for Individual Actions ---
+
+    /// <summary>
+    /// Handles the 'use_ability' action type.
+    /// </summary>
+    private void ProcessUseAbilityAction(string playerId, PlayerConnection player, Dictionary<string, object> actionData)
+    {
+        // 1. Extract required data
+        if (!actionData.TryGetValue("abilityId", out var abilityIdObj))
+        {
+            Debug.LogWarning($"CombatService: 'use_ability' action missing 'abilityId' for player {playerId}.");
+            // TODO: Send error to client
+            return;
+        }
+
+        if (!actionData.TryGetValue("target", out var targetObj))
+        {
+            Debug.LogWarning($"CombatService: 'use_ability' action missing 'target' for player {playerId}.");
+            // TODO: Send error to client
+            return;
+        }
+
+        string abilityId = abilityIdObj.ToString();
+        string targetSpecifier = targetObj.ToString();
+
+        // 2. Fetch Ability Definition
+        AbilityDefinition abilityDef = AbilityExecutionService.Instance.GetAbilityDefenitionById(abilityId); // Use your actual lookup method
+        if (abilityDef == null)
+        {
+            Debug.LogError($"CombatService: AbilityDefinition not found for ID: '{abilityId}' from player {playerId}.");
+            // TODO: Send error to client (e.g., "Ability not found")
+            // Decide if this consumes an action slot. Let's assume it doesn't if it fails to resolve.
+            return;
+        }
+
+        // 3. Determine Action Cost
+        int actionCost = abilityDef.actionCost;
+        // Optional: Add validation for action cost
+        if (actionCost <= 0)
+        {
+            Debug.LogWarning($"CombatService: Ability '{abilityId}' has invalid action cost ({actionCost}). Using cost of 1.");
+            actionCost = 1; // Default or error handling
+        }
+
+        // 4. Check Action Availability using EncounterManager (with specific cost)
+        if (!_encounterManager.IsActionAvailable(actionCost))
+        {
+            Debug.LogWarning($"CombatService: Player {playerId} tried to use ability '{abilityId}' (cost: {actionCost}), but only has {_encounterManager.GetActionsRemaining()} actions available.");
+            // TODO: Send specific error to client (e.g., "Not enough actions")
+            // Do not process the action further if not enough actions
+            return;
+        }
+
+        // 5. Resolve Target using EncounterManager
+        IDamageable resolvedTarget = _encounterManager.ResolveTarget(targetSpecifier, player);
+        if (resolvedTarget == null)
+        {
+            Debug.LogWarning($"CombatService: Failed to resolve target '{targetSpecifier}' for ability {abilityId} from player {playerId}.");
+            // TODO: Send error to client (e.g., "Invalid target")
+            // Decide if this consumes an action slot. Let's assume it doesn't if it fails to resolve.
+            // If it *should* consume on failed resolve, call _encounterManager.RecordActionUsed(actionCost) here.
+            return;
+        }
+
+        // 6. Delegate to AbilityExecutionService
+        List<IDamageable> targetList = new List<IDamageable> { resolvedTarget };
+        bool success = AbilityExecutionService.Instance.ExecuteAbility(
+            caster: player,
+            targets: targetList,
+            abilityDefinition: abilityDef,
+            context: AbilityExecutionService.AbilityContext.InCombat
+            // Note: isFromItem is false here as this is a direct ability use, not item use.
+        );
+
+        // 7. Handle result and Record Action Usage
+        if (success)
+        {
+            Debug.Log($"CombatService: Ability {abilityId} executed successfully for player {playerId}.");
+            // Record the action usage based on the actual ability cost.
+            _encounterManager.RecordActionUsed(actionCost);
+            // TODO: Potentially send success confirmation/update to client(s)
+        }
+        else
+        {
+            Debug.Log($"CombatService: Ability {abilityId} execution failed for player {playerId}.");
+            // TODO: Send specific error message to client (e.g., "Ability execution failed")
+
+            // Decide if a failed action still consumes the slot. Often it does.
+            // Let's assume it does for simplicity, consuming the actions.
+            _encounterManager.RecordActionUsed(actionCost);
+            // TODO: Potentially send update to clients about the failed attempt and action count changes.
+        }
+    }
+
+    /// <summary>
+    /// Handles the 'melee_attack' action type.
+    /// </summary>
+    private void ProcessMeleeAttackAction(string playerId, PlayerConnection player)
+    {
+        // TODO: Implement proper melee attack logic.
+        // This might involve checking weapon, calculating damage, applying status, etc.
+        // For now, treat it as a standard 1-action ability or define a specific cost.
+
+        // Example: Assume melee attack costs 1 action
+        int meleeActionCost = 1;
+        if (!_encounterManager.IsActionAvailable(meleeActionCost))
+        {
+            Debug.LogWarning($"CombatService: Player {playerId} tried to perform melee attack (cost: {meleeActionCost}), but only has {_encounterManager.GetActionsRemaining()} actions available.");
+            // TODO: Send specific error to client
+            return;
+        }
+
+        Debug.Log($"CombatService: Basic melee attack executed for player {playerId}.");
+        // TODO: Add actual melee attack logic here (target selection, damage calculation, etc.)
+
+        _encounterManager.RecordActionUsed(meleeActionCost);
+        // TODO: Send updates to clients about the attack.
+    }
+
+    /// <summary>
+    /// Handles the 'use_item' action type.
+    /// </summary>
+    private void ProcessUseItemAction(string playerId, Dictionary<string, object> actionData)
+    {
+        // Handle item use during combat
+        // This should route back to InventoryService.
+        if (!actionData.TryGetValue("itemId", out var itemIdObj))
+        {
+            Debug.LogWarning($"CombatService: 'use_item' action missing 'itemId' for player {playerId}.");
+            // TODO: Send error to client
+            return;
+        }
+
+        string itemId = itemIdObj.ToString();
+
+        // The InventoryService should handle the logic, including checking action costs
+        // if the item use consumes actions. It might call AbilityExecutionService
+        // with InCombat context if needed.
+        bool itemUseInitiated = InventoryService.Instance.UseItem(playerId, itemId);
+
+        if (itemUseInitiated)
+        {
+            // If the item use was initiated, the InventoryService/AbilityExecutionService
+            // is responsible for calling _encounterManager.RecordActionUsed(cost) if applicable.
+            // This keeps the action cost logic encapsulated where it belongs (with the item/ability).
+            Debug.Log($"CombatService: Item use initiated for player {playerId}, item ID {itemId}.");
+            // The actual recording of action usage happens inside InventoryService/AbilityExecutionService
+            // based on the item's linked ability cost.
+        }
+        else
+        {
+            Debug.LogWarning($"CombatService: Item use failed for player {playerId}, item ID {itemId}.");
+            // The reason for failure should be logged/handled by InventoryService.
+            // Decide if a failed item use (e.g. item not found, conditions not met)
+            // should consume an action. Let's assume it does NOT consume an action if it fails to start.
+        }
+
+        // OLD Logic (just consumed 1 action regardless):
+        // _encounterManager.RecordActionUsed(); // This is now handled internally by UseItem if needed.
+    }
+    // --- End Helper Methods ---
 
     // --- Message Handling ---
 
