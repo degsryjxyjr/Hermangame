@@ -244,17 +244,31 @@ public class InventoryService : MonoBehaviour
             case ItemDefinition.ItemType.Equipment:
                 Debug.Log($"Toggling equipment: {itemSlotToUse.ItemDef.displayName} (ID: {itemSlotToUse.itemId}) for player {player.LobbyData.Name}");
                 
+                // --- KEY CHANGE 1: Declare variable for the unequipped item ---
+                InventorySlot unequippedSlot = null;
+                // --- END KEY CHANGE 1 ---
+
                 // 6a. Delegate to the PlayerInventory's equip logic to handle state changes
                 // This handles moving the item instance between Bag/Equipped dict and toggling isEquipped flag.
-                itemUsed = inventory.EquipItem(itemId); 
+                // --- KEY CHANGE 2: Pass the out parameter ---
+                itemUsed = inventory.EquipItem(itemId, out unequippedSlot); 
+                // --- END KEY CHANGE 2 ---
                 
                 if (itemUsed)
                 {
+                    // --- KEY CHANGE 3: Handle the unequipped item effects FIRST ---
+                    // If EquipItem indicated an item was unequipped, remove its effects now.
+                    if (unequippedSlot != null && unequippedSlot.ItemDef != null)
+                    {
+                        player.OnUnequipItem(unequippedSlot.ItemDef);
+                        Debug.Log($"Item {unequippedSlot.ItemDef.displayName} was automatically unequipped (replaced) and its effects were removed.");
+                    }
+                    // --- END KEY CHANGE 3 ---
+
                     // 6b. Apply or Remove Effects based on the NEW state of the item
                     // Check the *new* state of the item after EquipItem has processed it.
                     // itemSlotToUse now refers to the same InventorySlot instance, but its properties
                     // (like isEquipped and its location in BagItems/EquippedItems) have been updated.
-                    
                     if (itemSlotToUse.isEquipped) // isEquipped is now TRUE -> Item was just EQUIPPED
                     {
                         // --- Apply Equipment Effects ---
@@ -274,6 +288,7 @@ public class InventoryService : MonoBehaviour
                     Debug.LogWarning($"Failed to toggle equipment state for item {itemSlotToUse.ItemDef.displayName}.");
                 }
                 break;
+                
             default:
                 Debug.Log($"No use behavior defined for item type: {itemSlotToUse.ItemDef.itemType} (Item: {itemSlotToUse.ItemDef.displayName})");
                 itemUsed = false;

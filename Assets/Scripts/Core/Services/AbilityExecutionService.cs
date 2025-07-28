@@ -11,6 +11,9 @@ public class AbilityExecutionService : MonoBehaviour
 {
     public static AbilityExecutionService Instance { get; private set; }
 
+    public AbilityDefinition[] allAbilities;
+
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -22,7 +25,24 @@ public class AbilityExecutionService : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
         Debug.Log("AbilityExecutionService initialized and set as singleton");
+        // Fetching and caching all abilities
+        allAbilities = Resources.LoadAll<AbilityDefinition>("Abilities");
     }
+
+    public AbilityDefinition GetAbilityDefenitionById(string id)
+    {
+        AbilityDefinition abilityDef = Resources.Load<AbilityDefinition>($"Abilities/{id}");
+        if (abilityDef != null)
+        {
+            return abilityDef;
+        }
+        else
+        {
+            Debug.LogWarning($"Ability {id} not found!");
+            return null;
+        }
+    }
+
 
     /// <summary>
     /// Context in which an ability is being executed.
@@ -43,7 +63,7 @@ public class AbilityExecutionService : MonoBehaviour
     /// <param name="abilityDefinition">The ability to execute.</param>
     /// <param name="context">The context in which the ability is being used.</param>
     /// <returns>True if executed successfully, false otherwise.</returns>
-    public bool ExecuteAbility(IEntity caster, List<IDamageable> targets, AbilityDefinition abilityDefinition, AbilityContext context)
+    public bool ExecuteAbility(IEntity caster, List<IDamageable> targets, AbilityDefinition abilityDefinition, AbilityContext context, bool isFromItem = false)
     {
 
         // --- Validation ---
@@ -64,7 +84,7 @@ public class AbilityExecutionService : MonoBehaviour
         }
 
         string casterName = caster.GetEntityName() ?? "Unknown Entity";
-        Debug.Log($"AbilityExecutionService: Executing ability '{abilityDefinition.abilityName}' from caster '{casterName}' in context '{context}'.");
+        Debug.Log($"AbilityExecutionService: Trying to execute ability '{abilityDefinition.abilityName}' from caster '{casterName}' in context '{context}', isFromItem: {isFromItem}).");
 
 
         // --- Context Validation ---
@@ -93,8 +113,10 @@ public class AbilityExecutionService : MonoBehaviour
 
         // --- Ability Ownership Validation ---
         // Skip this check if the ability is being executed from an item
-        bool isFromItem = context == AbilityContext.OutOfCombat && 
-                        abilityDefinition.IsItemAbility();
+
+        //OLD WAY!! DOESNT ALLOW HEALTHPOTIONS IN COMBAT!!!
+        //bool isFromItem = context == AbilityContext.OutOfCombat && 
+        //                abilityDefinition.IsItemAbility();
 
         if (!isFromItem)
         {
@@ -156,7 +178,7 @@ public class AbilityExecutionService : MonoBehaviour
 
         if (executedSuccessfully)
         {
-            Debug.Log($"Ability {abilityDefinition.abilityName} executed successfully by {casterName} on {targets.Count} target(s) (context: {context}).");
+            Debug.Log($"Ability {abilityDefinition.abilityName} executed successfully by {casterName} on {targets.Count} target(s) (context: {context}), isFromItem: {isFromItem}).");
             // TODO: Trigger animations, VFX, send updates to clients (health changes, mana spent, cooldowns started, etc.)
             // Consider what updates are needed based on context (OOC vs InCombat)
             // These are often handled by the caller (CombatService/InventoryService) or the IAbilityEffect itself.
@@ -227,19 +249,22 @@ public class AbilityExecutionService : MonoBehaviour
     {
         // The target is usually predetermined (often self) by the item's design.
         List<IDamageable> targets = new List<IDamageable> { target };
-        return ExecuteAbility(caster, targets, abilityDefinition, context);
+        // When using items we set ifFromItem so the player doesnt need to have the ability themselves
+        bool isFromItem = true;
+        return ExecuteAbility(caster, targets, abilityDefinition, context, isFromItem);
     }
 
     // --- Placeholder Methods for Future Expansion ---
     // These represent areas that need more development as the game grows.
 
-    private AbilityDefinition GetAbilityDefinitionById(string id)
-    {
-        // Implement a lookup system. Could be a dictionary loaded at startup,
+    // DEPRECATED!!!!!!!!!!!!!!!!!!!
+    //private AbilityDefinition GetAbilityDefinitionById(string id)
+    //{
+    //    // Implement a lookup system. Could be a dictionary loaded at startup,
         // or simply using Resources.Load as shown in HandleMessage.
         // Using Resources.Load directly can be slow, so a cache is better.
-        return Resources.Load<AbilityDefinition>($"Abilities/{id}");
-    }
+    //    return Resources.Load<AbilityDefinition>($"Abilities/{id}");
+    //}
 
     // --- Message Handling for Direct OOC Casting (if implemented) ---
     /*
