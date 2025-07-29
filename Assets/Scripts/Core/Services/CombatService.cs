@@ -384,26 +384,13 @@ public class CombatService : MonoBehaviour
             // 3. Execute the ability using AbilityExecutionService
             List<IDamageable> targets = new List<IDamageable> { chosenTarget };
 
-            // Note: EnemyEntity doesn't inherit from PlayerConnection.
-            // AbilityExecutionService.ExecuteAbility expects a PlayerConnection caster.
-            // We need to decide how to handle non-player casters.
-            // Option 1: Modify AbilityExecutionService to accept IEntity or a base class for casters.
-            // Option 2: Create a dummy/placeholder PlayerConnection for the enemy (not ideal).
-            // Option 3: Handle enemy actions differently (e.g., a separate EnemyAction system).
-            // For prototype, let's assume we can cast it somehow or handle it specially.
-            // Let's log it for now.
-
             Debug.Log($"CombatService: Enemy {enemy.GetEntityName()} chose to use {chosenAbility.abilityName} on THIS IS NOT IMPLEMENTED.");
-
-            // TODO: Implement actual enemy action execution.
-            // This requires resolving the caster issue mentioned above.
-            //chosenTarget.TakeDamage(10, AbilityDefinition.DamageType.Physical);
-            //_encounterManager.AdvanceTurn();
 
             bool success = AbilityExecutionService.Instance.ExecuteAbility(enemy, targets, chosenAbility, AbilityExecutionService.AbilityContext.InCombat);
             if (success)
             {
-                // Handle success (e.g., advance turn)
+                // Handle success (broadcast new target stats to all clients and advance turn)
+                SendCombatEntityUpdate();
                 _encounterManager.AdvanceTurn();
             }
         }
@@ -415,6 +402,105 @@ public class CombatService : MonoBehaviour
         }
     }
     // --- End Enemy AI Trigger ---
+
+    // Helper function to broadcast encounter entity updates(player heals, enemy takes damage etc)
+    public void SendCombatEntityUpdate(bool sendDataFromAllEntities = true)
+    {
+
+
+
+        if (sendDataFromAllEntities)
+        {
+            // --- Prepare Data ---
+            var combatEntityData = new Dictionary<string, object>
+            {
+                ["type"] = "combat_entites_update",
+                ["message"] = "Update to all entities stats!"
+            };
+            // --- End Prepare Data ---
+
+            // Add Player Data
+            var playersData = new List<object>();
+            foreach (var player in _encounterManager.GetActivePlayers())
+            {
+                if (player != null)
+                {
+                    playersData.Add(new
+                    {
+                        id = player.NetworkId, // Use NetworkId for identification
+                        name = player.LobbyData?.Name ?? "Unknown Player",
+                        currentHealth = player.CurrentHealth,
+                        maxHealth = player.MaxHealth,
+                        actions = player.ActionsRemaining,
+                        attack = player.Attack,
+                        defense = player.Defense,
+                        magic = player.Magic,
+                        isAlive = player.IsAlive()
+                        // Add other relevant player data for the combat view
+                    });
+                }
+            }
+            combatEntityData["players"] = playersData;
+
+            // Add Enemy Data
+            var enemiesData = new List<object>();
+            foreach (var enemy in _encounterManager.GetActiveEnemies())
+            {
+                if (enemy != null)
+                {
+                    // Get the base definition name, or fallback
+                    string enemyName = enemy.GetEntityName() ?? "Unknown Enemy";
+
+                    enemiesData.Add(new
+                    {
+                        // Use InstanceID or a unique ID assigned by EncounterManager for client targeting
+                        id = enemy.GetInstanceID().ToString(),
+                        name = enemyName,
+                        currentHealth = enemy.CurrentHealth,
+                        maxHealth = enemy.MaxHealth,
+                        actions = enemy.ActionsRemaining,
+                        attack = enemy.Attack,
+                        defense = enemy.Defense,
+                        magic = enemy.Magic,
+                        isAlive = enemy.IsAlive()
+                        // Add other relevant enemy data (icon path if needed for client UI?)
+                        // icon = enemy.EnemyDefinition?.icon != null ? $"images/enemies/{enemy.EnemyDefinition.icon.name}" : "images/enemies/default-enemy.jpg"
+                    });
+                }
+            }
+            combatEntityData["enemies"] = enemiesData;
+            
+            // --- Send Entity Update Message to ALL Players in the Encounter ---
+            GameServer.Instance.Broadcast(combatEntityData);
+            Debug.Log($"CombatService: Broadcast 'combat_entities_update' message");
+        }
+        else
+        {
+            // --- Prepare Data ---
+            var combatEntityData = new Dictionary<string, object>
+            {
+                ["type"] = "combat_entity_update",
+                ["message"] = "Update to entity's stats!"
+            };
+            // --- Send Entity Update Message to ALL Players in the Encounter ---
+            foreach (var player in _encounterManager.GetActivePlayers())
+            {
+                if (player != null && player.NetworkId != null)
+                {
+                    GameServer.Instance.SendToPlayer(player.NetworkId, combatEntityData);
+                    Debug.Log($"CombatService: Sent 'combat_entity_update' message to player {player.LobbyData?.Name ?? player.NetworkId}");
+                }
+            }
+        }
+
+    }
+
+
+
+    // End helper function
+
+
+
 
     // --- Player Action Processing ---
     /// <summary>
@@ -445,8 +531,6 @@ public class CombatService : MonoBehaviour
             return;
         }
 
-        Debug.Log($"CombatService: Received combat action from player {playerId}. Action Data: {actionData}");
-
         // 2. Parse action type
         if (!actionData.TryGetValue("type", out var typeObj))
         {
@@ -457,18 +541,21 @@ public class CombatService : MonoBehaviour
 
         string actionType = typeObj.ToString();
 
+        Debug.Log($"CombatService: Received combat action from player {playerId}. Action Type: {actionType}");
+
         switch (actionType)
         {
             case "use_ability":
                 ProcessUseAbilityAction(playerId, currentPlayer, actionData);
                 break;
 
-            case "melee_attack":
-                ProcessMeleeAttackAction(playerId, currentPlayer);
-                break;
-
             case "use_item":
                 ProcessUseItemAction(playerId, actionData);
+                break;
+
+            case "end_turn":
+                Debug.Log($"CombatService: Received end_turn msg from player {playerId}. Advancing turn.");
+                _encounterManager.AdvanceTurn();
                 break;
 
             default:
@@ -571,10 +658,14 @@ public class CombatService : MonoBehaviour
             // Note: isFromItem is false here as this is a direct ability use, not item use.
         );
 
-        // 7. Handle result and Record Action Usage
+        // 7. Handle result, Record Action Usage and broadcast entity updates for the targetted entitites
         if (success)
         {
+
             Debug.Log($"CombatService: Ability {abilityId} executed successfully for player {playerId}.");
+            // broadcast entity update
+            SendCombatEntityUpdate();
+
             // Record the action usage based on the actual ability cost.
             _encounterManager.RecordActionUsed(actionCost);
             // TODO: Potentially send success confirmation/update to client(s)
@@ -589,31 +680,6 @@ public class CombatService : MonoBehaviour
             _encounterManager.RecordActionUsed(actionCost);
             // TODO: Potentially send update to clients about the failed attempt and action count changes.
         }
-    }
-
-    /// <summary>
-    /// Handles the 'melee_attack' action type.
-    /// </summary>
-    private void ProcessMeleeAttackAction(string playerId, PlayerConnection player)
-    {
-        // TODO: Implement proper melee attack logic.
-        // This might involve checking weapon, calculating damage, applying status, etc.
-        // For now, treat it as a standard 1-action ability or define a specific cost.
-
-        // Example: Assume melee attack costs 1 action
-        int meleeActionCost = 1;
-        if (!_encounterManager.IsActionAvailable(meleeActionCost))
-        {
-            Debug.LogWarning($"CombatService: Player {playerId} tried to perform melee attack (cost: {meleeActionCost}), but only has {_encounterManager.GetActionsRemaining()} actions available.");
-            // TODO: Send specific error to client
-            return;
-        }
-
-        Debug.Log($"CombatService: Basic melee attack executed for player {playerId}.");
-        // TODO: Add actual melee attack logic here (target selection, damage calculation, etc.)
-
-        _encounterManager.RecordActionUsed(meleeActionCost);
-        // TODO: Send updates to clients about the attack.
     }
 
     /// <summary>
@@ -639,12 +705,14 @@ public class CombatService : MonoBehaviour
 
         if (itemUseInitiated)
         {
-            // If the item use was initiated, the InventoryService/AbilityExecutionService
-            // is responsible for calling _encounterManager.RecordActionUsed(cost) if applicable.
-            // This keeps the action cost logic encapsulated where it belongs (with the item/ability).
+            // broadcast entity update
+            SendCombatEntityUpdate();
+
+            // Record the action usage (FOR NOW JUST THE DEFAULT COST OF 1!!!! TODO FIX THIS TO USE THE ACTUAL ACTIONS).
+            _encounterManager.RecordActionUsed();
+
             Debug.Log($"CombatService: Item use initiated for player {playerId}, item ID {itemId}.");
-            // The actual recording of action usage happens inside InventoryService/AbilityExecutionService
-            // based on the item's linked ability cost.
+
         }
         else
         {

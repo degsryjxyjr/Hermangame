@@ -82,6 +82,7 @@
             <div class="combat-section">
                 <h3>Combat Log</h3>
                 <div id="combatLog">
+                    <div id="combatLogEntries"></div> <!-- Add this inner container -->
                     <!-- Combat messages will appear here -->
                 </div>
             </div>
@@ -193,7 +194,7 @@
                     // Inventory closing
                     if (isInCombat) {
                         // Keep stats hidden in combat, or show combat-specific stats
-                        statsDisplay.style.display = 'none';
+                        statsDisplay.style.display = 'block';
                     } else {
                         // Show main stats outside combat
                         statsDisplay.style.display = 'block';
@@ -474,7 +475,6 @@
                         case "Combat":
                             enterCombatMode();
                             break;
-                        // add other states if you need them
                     }
                     break;
 
@@ -585,12 +585,58 @@
                     updateCombatantStats(msg); // Implement this function
                     break;
 
+                // Inside your main message switch statement
+                case 'enemy_defeated':
+                    logDebug(msg.message || "An enemy has been defeated!", 'success');
+                    if (msg.enemyId) {
+                        removeEnemyFromCombatView(msg.enemyId);
+                        // Optional: Play a sound or animation if you have them
+                    } else {
+                        console.warn("Received 'enemy_defeated' message without 'enemyId':", msg);
+                    }
+                    break;
+
                 case 'ability_effect':
                     // This message contains the result of an ability (damage, heal, etc.)
                     logCombatMessage(msg.message, "system"); // Or determine player/enemy source
                     // If msg contains numerical data, update stats here too
                     if (msg.targetStats) { // Example: server sends updated target stats
                         updateCombatantStats(msg.targetStats);
+                    }
+                    break;
+
+                case 'combat_entity_update': 
+                    // This message updates a specific entity's stats (e.g., HP after damage/heal)
+                    if (msg.entityId && msg.stats) {
+                        updateCombatantStats({
+                            id: msg.entityId,
+                            type: msg.entityType, // 'player' or 'enemy'
+                            ...msg.stats
+                        });
+                    } else {
+                        console.warn("Received 'combat_entity_update' message with missing 'entityId' or 'stats':", msg);
+                    }
+                    break;
+                case 'combat_entites_update': 
+                    // This message updates a all entities' stats (e.g., HP after damage/heal)
+                    // Store the initial state if needed for later reference
+                    currentCombatState = {
+                        players: msg.players,
+                        enemies: msg.enemies
+                        // Add other relevant top-level data from encounter_start if needed
+                    };
+
+                    // Crucially, call updateCombatView with the data from encounter_start
+                    // This should populate the player/enemy lists and initial state
+                    updateCombatView(msg); // <-- This is the key call
+
+                    logDebug(msg.message || "Updated all entities' stats");
+                    break;
+
+                case 'combat_message':
+                    // Properly handle combat log messages
+                    if (msg.message) {
+                        logCombatMessage(msg.message, msg.category || "system");
                     }
                     break;
 
@@ -607,13 +653,28 @@
             if (ws && ws.readyState === 1) ws.send(JSON.stringify(payload));
         }
 
+        // --- Helper Function to Remove Enemy UI Element ---
+        function removeEnemyFromCombatView(enemyId) {
+            const enemyElement = document.querySelector(`#enemyListCombat .entity-card[data-entity-id="${enemyId}"]`);
+            if (enemyElement) {
+                // Optional: Add a fade-out animation class before removing
+                enemyElement.classList.add('fade-out');
+                setTimeout(() => enemyElement.remove(), 300); // Remove after animation
+                enemyElement.remove();
+                logDebug(`Removed enemy with ID ${enemyId} from UI.`, 'info');
+            } else {
+                console.warn(`Tried to remove enemy with ID ${enemyId}, but element not found in UI.`);
+            }
+        }
 
         // --- Mode Entry/Exit ---
         function enterCombatMode() {
             document.getElementById('combatPanel').style.display = 'block';
-            // Hide main game stats if separate
+
+            // showing this for debuggin purposes
             const statsDisplay = document.getElementById('playerStatsDisplay');
-            if (statsDisplay) statsDisplay.style.display = 'none';
+            if (statsDisplay) statsDisplay.style.display = 'block';
+
             // Ensure inventory panel is hidden initially when entering combat
             const inventoryPanel = document.getElementById('inventoryPanel');
             if (inventoryPanel) inventoryPanel.style.display = 'none';
@@ -624,7 +685,11 @@
 
             // Clear previous state/logs
             clearCombatLog();
-            
+            // Initialize combat log
+            const combatLog = document.getElementById('combatLogEntries');
+            if (combatLog) {
+                combatLog.innerHTML = '<div class="combat-log-entry combat-log-system">Combat started!</div>';
+            }
             // Clear player/enemy lists if needed
             if (document.getElementById('playerListCombat')) document.getElementById('playerListCombat').innerHTML = '';
             if (document.getElementById('enemyListCombat')) document.getElementById('enemyListCombat').innerHTML = '';
@@ -671,9 +736,9 @@
             players.forEach(playerData => {
                 // Create player element
                 const playerEl = document.createElement('div');
-                playerEl.className = `entity-card player ${playerData.networkId === currentPlayerId ? 'current-player' : ''}`;
+                playerEl.className = `entity-card player ${playerData.id === currentPlayerId ? 'current-player' : ''}`;
                 playerEl.dataset.entityType = 'player';
-                playerEl.dataset.entityId = playerData.networkId;
+                playerEl.dataset.entityId = playerData.id;
 
                 // Player Name
                 const nameEl = document.createElement('div');
@@ -822,16 +887,7 @@
                 // Still add basic actions/end turn?
             }
 
-            // --- 1. Melee Attack (Basic Action) ---
-            // This is often considered a default action, not necessarily an "unlocked ability"
-            const attackBtn = document.createElement('button');
-            attackBtn.className = 'action-btn';
-            attackBtn.textContent = 'Melee Attack';
-            // Melee Attack typically targets an enemy
-            attackBtn.onclick = () => initiateAction('melee_attack'); // initiateAction handles target selection
-            actionContainer.appendChild(attackBtn);
-
-            // --- 2. Use Ability (Magic/Spells) ---
+            // --- 1. Use Ability ---
             // Iterate through the abilities received from the server
             if (Array.isArray(playerStats.abilities)) {
                 playerStats.abilities.forEach(ability => {
@@ -899,9 +955,7 @@
             selectedAction = { type: actionType, details: details };
             
             // Check if action requires a target
-            const needsTarget = (actionType === 'melee_attack' || 
-                                actionType === 'use_ability' || 
-                                (actionType === 'use_item' && details.itemId)); // Assume items need targets for now
+            const needsTarget = (actionType === 'use_ability');
 
             if (needsTarget) {
                 document.getElementById('targetSelectionPrompt').style.display = 'block';
@@ -933,10 +987,13 @@
             const targetId = targetElement.dataset.entityId;
             selectedTarget = { type: targetType, id: targetId };
 
-            
+            // --- CORRECTED: Format target specifier as expected by server ---
+            // Option 1: Combined string like "enemy_-22160"
+            const targetSpecifier = `${targetType}_${targetId}`;
+            // --- END CORRECTION ---
 
             // Add target to action details
-            const actionDetailsWithTarget = { ...selectedAction.details, target: targetId};
+            const actionDetailsWithTarget = { ...selectedAction.details, target: targetSpecifier};
 
             // Send the complete action
             sendCombatAction(selectedAction.type, actionDetailsWithTarget);
@@ -969,11 +1026,21 @@
 
         function logCombatMessage(message, category = "system") {
             const logContainer = document.getElementById('combatLogEntries');
+            if (!logContainer) {
+                console.error("Combat log container not found!");
+                return;
+            }
+            
             const entryEl = document.createElement('div');
             entryEl.className = `combat-log-entry combat-log-${category}`;
             entryEl.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
             logContainer.appendChild(entryEl);
-            logContainer.scrollTop = logContainer.scrollHeight; // Auto-scroll to bottom
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // Only log to debug if not in combat mode
+            if (!isInCombat) {
+                logDebug(message);
+            }
         }
 
         function clearCombatLog() {
@@ -983,34 +1050,81 @@
             }
         }
 
-        function updateCombatantStats(statsUpdateData) {
-            // statsUpdateData is expected to have id, currentHealth, maxHealth
-            if (!statsUpdateData.id) return;
+        // --- Helper Function to Update a Specific Entity's Stats in the UI ---
+        function updateCombatantStats(entityData) {
+            // entityData should contain at least { id, type, currentHealth, maxHealth }
+            // type is needed to know which list to look in (player or enemy)
+            const entityId = entityData.id;
+            const entityType = entityData.type;
 
-            // Try to find the corresponding element (player or enemy)
-            let combatantEl = document.querySelector(`.combatant[data-player-id="${statsUpdateData.id}"]`) ||
-                            document.querySelector(`.combatant[data-enemy-id="${statsUpdateData.id}"]`);
+            let targetContainerId, entitySelector;
+            if (entityType === 'player') {
+                targetContainerId = 'playerListCombat';
+                entitySelector = '.entity-card.player'; // Be specific to player cards
+            } else if (entityType === 'enemy') {
+                targetContainerId = 'enemyListCombat';
+                entitySelector = '.entity-card.enemy'; // Be specific to enemy cards
+            } else {
+                console.warn("updateCombatantStats: Unknown entity type:", entityType);
+                return;
+            }
 
-            if (combatantEl) {
-                const hpBarEl = combatantEl.querySelector('.hp-bar');
-                const hpFillEl = combatantEl.querySelector('.hp-fill');
-                const hpTextEl = combatantEl.querySelector('.hp-text');
+            const entityElement = document.querySelector(`#${targetContainerId} ${entitySelector}[data-entity-id="${entityId}"]`);
 
-                if (hpBarEl && hpFillEl && hpTextEl && statsUpdateData.maxHealth > 0) {
-                    const hpPercent = (statsUpdateData.currentHealth / statsUpdateData.maxHealth) * 100;
-                    hpFillEl.style.width = `${hpPercent}%`;
-                    hpTextEl.textContent = `${statsUpdateData.currentHealth}/${statsUpdateData.maxHealth}`;
+            if (entityElement) {
+                // Update HP Text
+                const hpTextElement = entityElement.querySelector('.hp-text');
+                if (hpTextElement && entityData.hasOwnProperty('currentHealth') && entityData.hasOwnProperty('maxHealth')) {
+                    hpTextElement.textContent = `${entityData.currentHealth}/${entityData.maxHealth} HP`;
+                }
 
-                    // Update color based on new HP
+                // Update HP Bar
+                const hpBarFillElement = entityElement.querySelector('.hp-bar-fill');
+                if (hpBarFillElement && entityData.hasOwnProperty('currentHealth') && entityData.hasOwnProperty('maxHealth')) {
+                    const hpPercent = (entityData.currentHealth / entityData.maxHealth) * 100;
+                    hpBarFillElement.style.width = `${hpPercent}%`;
+                    
+                    // Update color based on health (like in initial render)
+                    hpBarFillElement.classList.remove('low'); // Reset class
                     if (hpPercent < 30) {
-                        hpFillEl.style.background = 'linear-gradient(to right, #f44336, #f44336)';
-                    } else if (hpPercent < 60) {
-                        hpFillEl.style.background = 'linear-gradient(to right, #f44336, #FFC107)';
-                    } else {
-                        // Reset to default gradient if needed, or keep the default CSS one
-                        hpFillEl.style.background = ''; // Relies on CSS default
+                        hpBarFillElement.classList.add('low');
                     }
                 }
+
+                // Update Actions (if displayed)
+                // If you show actions remaining, find that element and update it similarly
+                // Example (if you have an element with class 'actions-text'):
+                /*
+                const actionsTextElement = entityElement.querySelector('.actions-text');
+                if (actionsTextElement && entityData.hasOwnProperty('actions')) {
+                    actionsTextElement.textContent = `Actions: ${entityData.actions}`;
+                }
+                */
+
+                // Handle Death State (Optional Visual)
+                if (entityData.hasOwnProperty('currentHealth') && entityData.currentHealth <= 0) {
+                    // Add a visual indicator for defeated entities
+                    entityElement.classList.add('defeated');
+                    // You could also grey out the card, add a skull icon, etc.
+                    const nameElement = entityElement.querySelector('.entity-name');
+                    if (nameElement) {
+                        nameElement.textContent = nameElement.textContent + " (Defeated)";
+                    }
+                } else {
+                    // Ensure defeated class is removed if entity is healed above 0
+                    entityElement.classList.remove('defeated');
+                    const nameElement = entityElement.querySelector('.entity-name');
+                    if (nameElement && nameElement.textContent.includes(" (Defeated)")) {
+                        nameElement.textContent = nameElement.textContent.replace(" (Defeated)", "");
+                    }
+                }
+
+                console.log(`Updated stats for ${entityType} ${entityId}`);
+            } else {
+                // This might happen if an update arrives for an entity that hasn't been fully rendered yet,
+                // or if the ID is incorrect. Log it for debugging.
+                console.warn(`updateCombatantStats: Could not find UI element for ${entityType} with ID ${entityId}`);
+                // Optional: If it's an enemy, maybe it was just defeated and removed? Check msg.type.
             }
         }
 

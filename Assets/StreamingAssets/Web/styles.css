@@ -49,7 +49,7 @@ button { padding: 8px 15px; margin: 5px; cursor: pointer; }
     background: rgba(0, 0, 0, 0.85);
     border: 3px solid gold; /* Thicker border */
     box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-    z-index: 100;
+    z-index: 150;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -273,7 +273,7 @@ button {
     min-width: 180px;    /* Set a minimum width to make it feel bigger */
     /* --- End Increased Size --- */
     font-family: Arial, sans-serif; /* Match your game's font */
-    z-index: 10; /* Ensure it's above game background but below potential UI like inventory */
+    z-index: 125; /* Ensure it's above game background but below potential UI like inventory */
     /* Initially hidden, shown when game starts and inventory is closed */
     display: none;
     /* Optional: Add a subtle border */
@@ -316,7 +316,7 @@ button {
     width: 100%;
     height: 100%;
     background: linear-gradient(to bottom, #111, #222);
-    z-index: 150;
+    z-index: 100;
     padding: 20px;
     box-sizing: border-box;
     overflow-y: auto;
@@ -481,7 +481,36 @@ button {
     font-family: monospace;
     font-size: 0.9em;
 }
+#combatLogEntries {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
 
+.combat-log-entry {
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+
+.combat-log-system {
+    color: #aaa;
+}
+
+.combat-log-player {
+    color: #4fc3f7;
+}
+
+.combat-log-enemy {
+    color: #f44336;
+}
+
+.combat-log-damage {
+    color: #ff9800;
+}
+
+.combat-log-heal {
+    color: #69f0ae;
+}
 .log-entry {
     margin-bottom: 5px;
 }

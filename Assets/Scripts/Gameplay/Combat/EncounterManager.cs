@@ -29,7 +29,7 @@ public class EncounterManager : MonoBehaviour
 
     [Header("Enemy Spawn Transfrom")]
     [Tooltip("Drag a Transform here for the enemy spawnpoint.")]
-    public Transform enemySpawnPoint;
+    public Transform enemyList;
 
 
     private EncounterState _currentState = EncounterState.NotStarted;
@@ -112,7 +112,7 @@ public class EncounterManager : MonoBehaviour
         {
             if (enemyDef != null)
             {
-                SpawnEnemy(enemyDef, enemySpawnPoint.position);
+                SpawnEnemy(enemyDef, enemyList);
             }
         }
 
@@ -141,7 +141,7 @@ public class EncounterManager : MonoBehaviour
         Debug.Log($"EncounterManager: Added player {player.LobbyData?.Name ?? "Unknown"} ({player.NetworkId}) to encounter.");
     }
 
-    private void SpawnEnemy(EnemyDefinition enemyDef, Vector3 position, int level = 1)
+    private void SpawnEnemy(EnemyDefinition enemyDef, Transform enemyList, int level = 1)
     {
         if (enemyDef?.modelPrefab == null)
         {
@@ -150,8 +150,8 @@ public class EncounterManager : MonoBehaviour
         }
 
         // 1. Instantiate the enemy's visual/model prefab
-        Debug.Log($"Attempting to spawn enemy prefab: {enemyDef.modelPrefab.name} at position {position}");
-        GameObject enemyGO = Instantiate(enemyDef.modelPrefab, position, Quaternion.identity);
+        Debug.Log($"Attempting to spawn enemy prefab: {enemyDef.modelPrefab.name}");
+        GameObject enemyGO = Instantiate(enemyDef.modelPrefab, enemyList);
         Debug.Log($"Spawned enemy GameObject: {enemyGO.name} at position {enemyGO.transform.position}");
 
 
@@ -420,15 +420,15 @@ public class EncounterManager : MonoBehaviour
         // Example logic for simple specifiers
         if (targetSpecifier.StartsWith("enemy_"))
         {
-            if (int.TryParse(targetSpecifier.Substring(6), out int index) && index > 0)
+            string enemyIdString = targetSpecifier.Substring(6); // Remove "enemy_"
+            if (int.TryParse(enemyIdString, out int enemyId)) 
             {
-                // "enemy_1" -> index 1 -> list index 0
-                int listIndex = index - 1;
-                if (listIndex < _activeEnemies.Count)
+                if (_activeEnemiesDict.TryGetValue(enemyId, out EnemyEntity targetEnemy))
                 {
-                    return _activeEnemies[listIndex];
+                    return targetEnemy;
                 }
             }
+
         }
         else if (targetSpecifier.StartsWith("player_"))
         {

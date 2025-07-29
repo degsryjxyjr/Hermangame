@@ -238,8 +238,6 @@ public class InventoryService : MonoBehaviour
                 // Return true if the item use process (including consumption attempt) was initiated
                 return itemConsumed; // Simplified success check
             // --- End Consumable Case ---
-                itemUsed = itemConsumed;
-                break;
 
             case ItemDefinition.ItemType.Equipment:
                 Debug.Log($"Toggling equipment: {itemSlotToUse.ItemDef.displayName} (ID: {itemSlotToUse.itemId}) for player {player.LobbyData.Name}");
