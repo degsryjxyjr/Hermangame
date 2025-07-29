@@ -153,24 +153,37 @@ public class AbilityExecutionService : MonoBehaviour
         // Skipping cost validation if not in combat
         if (context == AbilityContext.InCombat)
         {
-            if (caster is IActionBudget actionEntity)
+
+            // checking if it's the casters turn
+            if (caster is IEntity turnEntity)
             {
-                if (actionEntity.ActionsRemaining < actionCost)
+                Debug.Log($"AbilityExecutionService: currentTurnEntity is'{EncounterManager.Instance.CurrentTurnEntity}'. Ability caster is {caster} whose name is {casterName}");
+
+                if (EncounterManager.Instance.CurrentTurnEntity == caster)
                 {
-                    Debug.LogWarning($"AbilityExecutionService: {casterName} does not have enough actions ({actionEntity.ActionsRemaining}) to cast {abilityDefinition.abilityName} (cost: {actionCost}).");
-                    return false; // Fail if entity can't afford the action cost
+                    if (caster is IActionBudget actionEntity)
+                    {
+                        if (actionEntity.ActionsRemaining < actionCost)
+                        {
+                            Debug.LogWarning($"AbilityExecutionService: {casterName} does not have enough actions ({actionEntity.ActionsRemaining}) to cast {abilityDefinition.abilityName} (cost: {actionCost}).");
+                            return false; // Fail if entity can't afford the action cost
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogError($"AbilityExecutionService: Caster '{casterName}' does not implement IActionBudget. Skipping action cost check.");
+                        // Depending on design, you might want to fail here if all casters must have budgets.
+                    }
                 }
-                // Note: We don't consume the action here. Its only needed in combat and handled by CombatService
                 else
                 {
-                    Debug.Log($"AbilityExecutionService: {casterName} has enough actions ({actionEntity.ActionsRemaining}) to cast {abilityDefinition.abilityName} (cost: {actionCost})");
+                    Debug.LogError($"AbilityExecutionService: It's not the casters '{casterName}' turn. Ability execution failed");
+                    return false; // Fail if not the casters turn 
                 }
+
+                
             }
-            else
-            {
-                Debug.LogError($"AbilityExecutionService: Caster '{casterName}' does not implement IActionBudget. Skipping action cost check.");
-                // Depending on design, you might want to fail here if all casters must have budgets.
-            }
+            
         }
         
         // --- End Action Cost Validation ---

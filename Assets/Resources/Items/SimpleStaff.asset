@@ -24,7 +24,7 @@ MonoBehaviour:
   magicModifier: 10
   linkedAbilities:
   - {fileID: 11400000, guid: c9e1694568f4ef34c803fbda7ee82d2b, type: 2}
-  - {fileID: 11400000, guid: e2ca85e47cf37814da14dd9ee4cbd0fe, type: 2}
+  - {fileID: 11400000, guid: 35f1582846efbad4ba1ae43d23dead45, type: 2}
   equipSlot: 1
   equipmentEffectSources: []
   modelPrefab: {fileID: 7235997375035445226, guid: ad839b5a434be6348996ad94bccd20b4, type: 3}
