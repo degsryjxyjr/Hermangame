@@ -617,7 +617,7 @@
                         console.warn("Received 'combat_entity_update' message with missing 'entityId' or 'stats':", msg);
                     }
                     break;
-                case 'combat_entites_update': 
+                case 'combat_entities_update': 
                     // This message updates a all entities' stats (e.g., HP after damage/heal)
                     // Store the initial state if needed for later reference
                     currentCombatState = {
@@ -740,6 +740,19 @@
                 playerEl.dataset.entityType = 'player';
                 playerEl.dataset.entityId = playerData.id;
 
+                // --- Create Icon Container and Image ---
+                const iconContainerEl = document.createElement('div');
+                iconContainerEl.className = 'entity-icon-container';
+
+                const iconImgEl = document.createElement('img');
+                iconImgEl.className = 'entity-icon';
+                iconImgEl.src = playerData.iconPath || 'images/players/default-player.png'; // Use received path or default
+                iconImgEl.alt = `${playerData.name} Icon`; // Accessibility
+
+                iconContainerEl.appendChild(iconImgEl);
+                // --- End Icon Creation ---
+
+
                 // Player Name
                 const nameEl = document.createElement('div');
                 nameEl.className = 'entity-name';
@@ -769,6 +782,7 @@
                 hpTextEl.textContent = `${playerData.currentHealth}/${playerData.maxHealth} HP`;
 
                 // Assemble Player Element
+                playerEl.appendChild(iconContainerEl);
                 hpBarEl.appendChild(hpFillEl);
                 playerEl.appendChild(nameEl);
                 playerEl.appendChild(statsEl);
@@ -794,6 +808,18 @@
                 enemyEl.className = 'entity-card enemy';
                 enemyEl.dataset.entityType = 'enemy';
                 enemyEl.dataset.entityId = enemyData.id; // Assuming enemy has a unique ID
+
+                // --- Create Icon Container and Image ---
+                const iconContainerEl = document.createElement('div');
+                iconContainerEl.className = 'entity-icon-container';
+
+                const iconImgEl = document.createElement('img');
+                iconImgEl.className = 'entity-icon';
+                iconImgEl.src = enemyData.iconPath || 'images/enemies/default-enemy.png'; // Use received path or default
+                iconImgEl.alt = `${enemyData.name} Icon`; // Accessibility
+
+                iconContainerEl.appendChild(iconImgEl);
+                // --- End Icon Creation ---
 
                 // Enemy Name
                 const nameEl = document.createElement('div');
@@ -824,6 +850,7 @@
                 hpTextEl.textContent = `${enemyData.currentHealth}/${enemyData.maxHealth} HP`;
 
                 // Assemble Enemy Element
+                enemyEl.appendChild(iconContainerEl); // <-- Add Icon Container
                 hpBarEl.appendChild(hpFillEl);
                 enemyEl.appendChild(nameEl);
                 enemyEl.appendChild(statsEl);

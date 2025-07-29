@@ -372,6 +372,7 @@ button {
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     transition: all 0.2s ease;
     cursor: pointer;
+    text-align: center;
 }
 
 .entity-card:hover {
@@ -395,6 +396,28 @@ button {
 .entity-card.selected-target {
     border-color: #2196f3;
     box-shadow: 0 0 10px rgba(33, 150, 243, 0.5);
+}
+
+.entity-icon-container {
+    width: 60px; /* Set a fixed size */
+    height: 60px;
+    margin: 0 auto 10px auto; /* Center horizontally, add space below */
+    border: 1px solid #555;
+    border-radius: 50%; /* Make it circular if desired */
+    overflow: hidden;
+    background-color: #2a2a2a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.entity-icon {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain; /* Scale the image to fit the container */
+    /* If you want pixelated icons: */
+    /* image-rendering: pixelated; */
+    /* image-rendering: -moz-crisp-edges; */
 }
 
 .entity-name {
