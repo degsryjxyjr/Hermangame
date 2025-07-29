@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: TestClass
   m_EditorClassIdentifier: 
   className: OnlyForTesting
-  classIcon: {fileID: 10901, guid: 0000000000000000f000000000000000, type: 0}
+  classIcon: {fileID: 0}
   description: test class
   baseHealth: 100
   baseAttack: 0
