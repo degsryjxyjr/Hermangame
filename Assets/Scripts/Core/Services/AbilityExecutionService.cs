@@ -161,6 +161,10 @@ public class AbilityExecutionService : MonoBehaviour
                     return false; // Fail if entity can't afford the action cost
                 }
                 // Note: We don't consume the action here. Its only needed in combat and handled by CombatService
+                else
+                {
+                    Debug.Log($"AbilityExecutionService: {casterName} has enough actions ({actionEntity.ActionsRemaining}) to cast {abilityDefinition.abilityName} (cost: {actionCost})");
+                }
             }
             else
             {
@@ -182,6 +186,16 @@ public class AbilityExecutionService : MonoBehaviour
             // TODO: Trigger animations, VFX, send updates to clients (health changes, mana spent, cooldowns started, etc.)
             // Consider what updates are needed based on context (OOC vs InCombat)
             // These are often handled by the caller (CombatService/InventoryService) or the IAbilityEffect itself.
+
+            // If the ability was from an item and succesfully used we need to call RecordActionUsed.
+            // Also maybe 
+            if (context == AbilityContext.InCombat && isFromItem == true)
+            {
+                // Record the action usage based on the actual ability cost.
+                EncounterManager.Instance.RecordActionUsed(abilityDefinition.actionCost);
+                // broadcast entity update
+                CombatService.Instance.SendCombatEntityUpdate();
+            }
         }
 
         return executedSuccessfully;
@@ -251,7 +265,12 @@ public class AbilityExecutionService : MonoBehaviour
         List<IDamageable> targets = new List<IDamageable> { target };
         // When using items we set ifFromItem so the player doesnt need to have the ability themselves
         bool isFromItem = true;
-        return ExecuteAbility(caster, targets, abilityDefinition, context, isFromItem);
+
+        // If function is called while in combat we need to validate that entity has enough actions. 
+        // and if so call RecordActionCost when executed succesfully
+
+        bool executeAbility = ExecuteAbility(caster, targets, abilityDefinition, context, isFromItem);
+        return executeAbility;
     }
 
     // --- Placeholder Methods for Future Expansion ---

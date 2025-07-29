@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2c0ce5d8a046a924aab36006beb8c2be, type: 3}
+  m_Name: DebugHealthPotion
+  m_EditorClassIdentifier: 
+  itemId: health_potion_02
+  displayName: Debug Health Potion
+  icon: {fileID: 21300000, guid: 9443509c6be388b42ae7a61b3e4e3ee9, type: 3}
+  itemType: 0
+  isStackable: 1
+  maxStack: 4
+  healthModifier: 0
+  attackModifier: 0
+  defenseModifier: 0
+  magicModifier: 0
+  linkedAbilities:
+  - {fileID: 11400000, guid: dc26027646483844bb956b459bd27928, type: 2}
+  equipSlot: 0
+  equipmentEffectSources: []
+  modelPrefab: {fileID: 7235997375035445226, guid: 4d79d2118e8a7f4408474b447ee395f8, type: 3}

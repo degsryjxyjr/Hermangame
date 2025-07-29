@@ -9,8 +9,8 @@ public class CombatService : MonoBehaviour
 
     // --- Basic Combat State  ---
     private bool _isInCombat = false;
-
-       // - End Basic Combat State -
+    public bool IsInCombat => _isInCombat;
+    // - End Basic Combat State -
 
     // --- Reference to EncounterManager ---
     // This will be instantiated or found in the combat scene.
