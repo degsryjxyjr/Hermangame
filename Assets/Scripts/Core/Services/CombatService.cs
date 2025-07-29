@@ -9,8 +9,8 @@ public class CombatService : MonoBehaviour
 
     // --- Basic Combat State  ---
     private bool _isInCombat = false;
-
-       // - End Basic Combat State -
+    public bool IsInCombat => _isInCombat;
+    // - End Basic Combat State -
 
     // --- Reference to EncounterManager ---
     // This will be instantiated or found in the combat scene.
@@ -106,6 +106,15 @@ public class CombatService : MonoBehaviour
         {
             if (player != null)
             {
+                // Determine the icon for the player (from their class definition)
+                string playerIconPath = "images/players/default-player.png"; // Default fallback
+                if (player.ClassDefinition != null && player.ClassDefinition.classIcon != null)
+                {
+                    // Use the sprite's name or asset name. 
+                    playerIconPath = $"images/players/{player.ClassDefinition.classIcon.name}.png";
+                }
+
+
                 playersData.Add(new
                 {
                     id = player.NetworkId, // Use NetworkId for identification
@@ -116,7 +125,9 @@ public class CombatService : MonoBehaviour
                     attack = player.Attack,
                     defense = player.Defense,
                     magic = player.Magic,
-                    isAlive = player.IsAlive()
+                    isAlive = player.IsAlive(),
+                    iconPath = playerIconPath
+
                     // Add other relevant player data for the combat view
                 });
             }
@@ -129,13 +140,25 @@ public class CombatService : MonoBehaviour
         {
             if (enemy != null)
             {
+                // Determine the icon for the enemy (from their definition)
+                string enemyIconPath = "images/enemies/default-enemy.png"; // Default fallback
+                if (enemy._enemyDefinition != null && enemy._enemyDefinition.icon != null)
+                {
+                    // Similar logic as for player icon.
+                    // Assuming organization like "images/enemies/{icon_name}.png"
+                    enemyIconPath = $"images/enemies/{enemy._enemyDefinition.icon.name}.png";
+                    // --- OR --- if you store a direct path:
+                    // enemyIconPath = enemy.EnemyDefinition.iconPath;
+                }
+
+
                 // Get the base definition name, or fallback
                 string enemyName = enemy.GetEntityName() ?? "Unknown Enemy";
 
                 enemiesData.Add(new
                 {
                     // Use InstanceID or a unique ID assigned by EncounterManager for client targeting
-                    id = enemy.GetInstanceID().ToString(), 
+                    id = enemy.GetInstanceID().ToString(),
                     name = enemyName,
                     currentHealth = enemy.CurrentHealth,
                     maxHealth = enemy.MaxHealth,
@@ -143,7 +166,8 @@ public class CombatService : MonoBehaviour
                     attack = enemy.Attack,
                     defense = enemy.Defense,
                     magic = enemy.Magic,
-                    isAlive = enemy.IsAlive()
+                    isAlive = enemy.IsAlive(),
+                    iconPath = enemyIconPath
                     // Add other relevant enemy data (icon path if needed for client UI?)
                     // icon = enemy.EnemyDefinition?.icon != null ? $"images/enemies/{enemy.EnemyDefinition.icon.name}" : "images/enemies/default-enemy.jpg"
                 });
@@ -414,7 +438,7 @@ public class CombatService : MonoBehaviour
             // --- Prepare Data ---
             var combatEntityData = new Dictionary<string, object>
             {
-                ["type"] = "combat_entites_update",
+                ["type"] = "combat_entities_update",
                 ["message"] = "Update to all entities stats!"
             };
             // --- End Prepare Data ---
@@ -425,6 +449,14 @@ public class CombatService : MonoBehaviour
             {
                 if (player != null)
                 {
+                    // Determine the icon for the player (from their class definition)
+                    string playerIconPath = "images/players/default-player.png"; // Default fallback
+                    if (player.ClassDefinition != null && player.ClassDefinition.classIcon != null)
+                    {
+                        // Use the sprite's name or asset name. 
+                        playerIconPath = $"images/players/{player.ClassDefinition.classIcon.name}.png";
+                    }
+
                     playersData.Add(new
                     {
                         id = player.NetworkId, // Use NetworkId for identification
@@ -435,7 +467,8 @@ public class CombatService : MonoBehaviour
                         attack = player.Attack,
                         defense = player.Defense,
                         magic = player.Magic,
-                        isAlive = player.IsAlive()
+                        isAlive = player.IsAlive(),
+                        iconPath = playerIconPath
                         // Add other relevant player data for the combat view
                     });
                 }
@@ -448,6 +481,16 @@ public class CombatService : MonoBehaviour
             {
                 if (enemy != null)
                 {
+
+
+
+                    // Determine the icon for the enemy (from their definition)
+                    string enemyIconPath = "images/enemies/default-enemy.png"; // Default fallback
+                    if (enemy._enemyDefinition != null && enemy._enemyDefinition.icon != null)
+                    {
+                        // Similar logic as for player icon.
+                        enemyIconPath = $"images/enemies/{enemy._enemyDefinition.icon.name}.png";
+                    }
                     // Get the base definition name, or fallback
                     string enemyName = enemy.GetEntityName() ?? "Unknown Enemy";
 
@@ -462,7 +505,8 @@ public class CombatService : MonoBehaviour
                         attack = enemy.Attack,
                         defense = enemy.Defense,
                         magic = enemy.Magic,
-                        isAlive = enemy.IsAlive()
+                        isAlive = enemy.IsAlive(),
+                        iconPath = enemyIconPath
                         // Add other relevant enemy data (icon path if needed for client UI?)
                         // icon = enemy.EnemyDefinition?.icon != null ? $"images/enemies/{enemy.EnemyDefinition.icon.name}" : "images/enemies/default-enemy.jpg"
                     });

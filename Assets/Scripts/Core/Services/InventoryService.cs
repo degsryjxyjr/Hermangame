@@ -135,21 +135,19 @@ public class InventoryService : MonoBehaviour
                 Debug.Log($"Using consumable: {itemSlotToUse.ItemDef.displayName} (ID: {itemSlotToUse.itemId}) for player {player.LobbyData.Name}");
 
                 bool itemConsumed = false;
-                // --- Check for Linked Abilities (UPDATED to use List) ---
-                // NEW (correct for List):
+                // --- Check for Linked Abilities  ---
                 if (itemSlotToUse.ItemDef.linkedAbilities != null && itemSlotToUse.ItemDef.linkedAbilities.Count > 0)
                 {
-                    // --- Execute the FIRST linked ability (UPDATED logic) ---
-                    // OLD (causes CS1061): AbilityDefinition abilityDef = itemSlotToUse.ItemDef.linkedAbility;
-                    // NEW (correct for List): Get the first ability from the list
+                    // --- Execute the FIRST linked ability ---
+                    //  Get the first ability from the list
                     AbilityDefinition primaryLinkedAbility = itemSlotToUse.ItemDef.linkedAbilities[0];
 
                     // Add a null check for safety
                     if (primaryLinkedAbility != null)
                     {
+
                         Debug.Log($"Consumable {itemSlotToUse.ItemDef.displayName} has a linked ability: {primaryLinkedAbility.abilityName}. Executing via AbilityExecutionService.");
 
-                        // --- CORRECTED CALL TO ABILITYEXECUTIONSERVICE ---
                         // Get the caster PlayerConnection instance
                         var casterConnection = player; // 'player' is the PlayerConnection instance from earlier in UseItem
 
@@ -334,6 +332,7 @@ public class InventoryService : MonoBehaviour
                             Debug.Log($"Failed to use item {itemId} for player {sessionId}");
                             GameServer.Instance.SendToPlayer(sessionId, new { type = "error", message = $"Failed to use item {itemId}." });
                         }
+
                     }
                     else
                     {
@@ -341,14 +340,7 @@ public class InventoryService : MonoBehaviour
                         GameServer.Instance.SendToPlayer(sessionId, new { type = "error", message = "Missing itemId for use action." });
                     }
                     break;
-                // 3b. Removed separate "equip" case.
-                //     The client should send "use" for equipping/unequipping.
-                //     This simplifies the server logic and ensures effect handling is consistent.
-                // case "equip":
-                //     // This path was redundant and error-prone. Replaced by using "use".
-                //     // if (msg.TryGetValue("itemId", out var equipItemIdObj)) { ... }
-                //     break;
-                // Add cases for other actions like "discard", "drop" etc. if needed
+
                 default:
                     Debug.LogWarning($"Unknown inventory action: {action}");
                     GameServer.Instance.SendToPlayer(sessionId, new { type = "error", message = $"Unknown inventory action: {action}" });

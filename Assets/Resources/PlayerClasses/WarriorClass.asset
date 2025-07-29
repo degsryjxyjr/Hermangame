@@ -20,6 +20,7 @@ MonoBehaviour:
   baseDefense: 10
   baseMagic: 1
   attackRange: 1
+  baseActions: 1
   characterPrefab: {fileID: 7235997375035445226, guid: 86a2ffd7020fc8e4183bbd9c973cead7, type: 3}
   animatorController: {fileID: 0}
   startingAbilities: []
@@ -28,6 +29,7 @@ MonoBehaviour:
   - {fileID: 11400000, guid: fd2c4ce97e15b844e9c12540a71dda30, type: 2}
   - {fileID: 11400000, guid: 20d3eb609a4f1dd428326e8d80f343dc, type: 2}
   - {fileID: 11400000, guid: 89a2956f9484fef4e96f861cfc34bc2c, type: 2}
+  - {fileID: 11400000, guid: cc78b082d600044478d43388a21a0e16, type: 2}
   healthGrowth:
     serializedVersion: 2
     m_Curve:
