@@ -287,6 +287,9 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
                     // --- End Reference Counting Logic ---
                 }
             }
+            // sending statsUpdate so abilities are uptodate on the client side as well. 
+            // This fixes a bug where equipment granting abilities isnt communicated to client.
+            SendStatsUpdateToClient();
         }
         // --- End Grant Linked Abilities ---
     }
@@ -355,6 +358,9 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
                     }
                 }
             }
+            // sending statsUpdate so abilities are uptodate on the client side as well. 
+            // This fixes a bug where equipment granting abilities isnt communicated to client.
+            SendStatsUpdateToClient();
         }
         // --- End Revoke Linked Abilities ---
 
