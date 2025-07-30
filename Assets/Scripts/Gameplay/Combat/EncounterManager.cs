@@ -103,6 +103,8 @@ public class EncounterManager : MonoBehaviour
         {
             if (player != null)
             {
+                // Also sending statsUpdate so abilities are populated even if no equipment has been equipped
+                player.SendStatsUpdateToClient();
                 AddPlayer(player);
             }
         }
