@@ -19,10 +19,14 @@ public class BasicStatBonusEffect : MonoBehaviour, IEquipmentEffect
         wearer.Attack += itemDefinition.attackModifier;
         wearer.Defense += itemDefinition.defenseModifier;
         wearer.Magic += itemDefinition.magicModifier;
+        // apply action modifiers from the itemDefinition
+        wearer.TotalActions += itemDefinition.actionModifier;
+
+
         // wearer.MaxHealth += itemDefinition.healthModifier; // Uncomment if MaxHealth modifier is used
-        
+
         Debug.Log($"BasicStatBonusEffect: Applied bonuses from {itemDefinition.displayName} to {wearer.LobbyData?.Name ?? "Unknown Player"}. " +
-                  $"ATK+{itemDefinition.attackModifier}, DEF+{itemDefinition.defenseModifier}, MAG+{itemDefinition.magicModifier}");
+                  $"ATK+{itemDefinition.attackModifier}, DEF+{itemDefinition.defenseModifier}, MAG+{itemDefinition.magicModifier}, ACT-{itemDefinition.actionModifier}");
                   
         // Send updated stats to client
         wearer.SendStatsUpdateToClient(); // Assuming this method exists on PlayerConnection
@@ -40,17 +44,19 @@ public class BasicStatBonusEffect : MonoBehaviour, IEquipmentEffect
         wearer.Attack -= itemDefinition.attackModifier;
         wearer.Defense -= itemDefinition.defenseModifier;
         wearer.Magic -= itemDefinition.magicModifier;
+        wearer.TotalActions -= itemDefinition.actionModifier;
         // wearer.MaxHealth -= itemDefinition.healthModifier; // Uncomment if MaxHealth modifier is used
 
         // Ensure stats don't go below zero (optional, depends on game design)
         wearer.Attack = Mathf.Max(0, wearer.Attack);
         wearer.Defense = Mathf.Max(0, wearer.Defense);
         wearer.Magic = Mathf.Max(0, wearer.Magic);
+        wearer.TotalActions = Mathf.Max(0, wearer.TotalActions);
         // wearer.MaxHealth = Mathf.Max(1, wearer.MaxHealth); // Ensure a minimum MaxHealth if needed
         // wearer.CurrentHealth = Mathf.Min(wearer.CurrentHealth, wearer.MaxHealth); // Clamp current HP
 
         Debug.Log($"BasicStatBonusEffect: Removed bonuses from {itemDefinition.displayName} from {wearer.LobbyData?.Name ?? "Unknown Player"}. " +
-                  $"ATK-{itemDefinition.attackModifier}, DEF-{itemDefinition.defenseModifier}, MAG-{itemDefinition.magicModifier}");
+                  $"ATK-{itemDefinition.attackModifier}, DEF-{itemDefinition.defenseModifier}, MAG-{itemDefinition.magicModifier}, ACT-{itemDefinition.actionModifier}");
 
         // Send updated stats to client
         wearer.SendStatsUpdateToClient(); // Assuming this method exists on PlayerConnection

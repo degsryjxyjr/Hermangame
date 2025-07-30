@@ -33,7 +33,7 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
     public int BaseActions { get; private set; } = 1; // Default
 
     // Current turn's action counts (can be modified by effects)
-    public int TotalActions { get; private set; } = 1;
+    public int TotalActions { get; set; } = 1;
 
     // Remaining actions for the current turn
     public int ActionsRemaining { get; private set; } = 1;
@@ -389,8 +389,9 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
         this.Attack += item.attackModifier;
         this.Defense += item.defenseModifier;
         this.Magic += item.magicModifier;
+        this.TotalActions += item.actionModifier;
         // this.MaxHealth += item.healthModifier; // Add if used
-        Debug.Log($"Applied basic bonuses: +{item.attackModifier} ATK, +{item.defenseModifier} DEF, +{item.magicModifier} MAG");
+        Debug.Log($"Applied basic bonuses: +{item.attackModifier} ATK, +{item.defenseModifier} DEF, +{item.magicModifier} MAG, +{item.actionModifier} ACT");
         SendStatsUpdateToClient();
     }
 
@@ -399,13 +400,15 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
         this.Attack -= item.attackModifier;
         this.Defense -= item.defenseModifier;
         this.Magic -= item.magicModifier;
+        this.TotalActions -= item.actionModifier;
         // this.MaxHealth -= item.healthModifier; // Subtract if used
         this.Attack = Mathf.Max(0, this.Attack);
         this.Defense = Mathf.Max(0, this.Defense);
         this.Magic = Mathf.Max(0, this.Magic);
+        this.TotalActions = Mathf.Max(0, this.TotalActions);
         // this.MaxHealth = Mathf.Max(1, this.MaxHealth); // Ensure minimum
         // this.CurrentHealth = Mathf.Min(this.CurrentHealth, this.MaxHealth);
-        Debug.Log($"Removed basic bonuses: -{item.attackModifier} ATK, -{item.defenseModifier} DEF, -{item.magicModifier} MAG");
+        Debug.Log($"Removed basic bonuses: -{item.attackModifier} ATK, -{item.defenseModifier} DEF, -{item.magicModifier} MAG, -{item.actionModifier} ACT");
         SendStatsUpdateToClient();
     }
 
