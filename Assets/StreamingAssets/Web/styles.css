@@ -502,17 +502,29 @@ button {
     overflow-y: auto;
     padding: 10px;
     font-family: monospace;
-    font-size: 0.9em;
+    font-size: 1em; /* 1em is typically the base size, increase if needed, e.g., 1.1em */
 }
 #combatLogEntries {
     display: flex;
     flex-direction: column;
     gap: 5px;
+        /* Add these lines */
+    overflow-y: auto; /* Make it scrollable */
+    max-height: 100%; /* Ensure it doesn't exceed the parent's height */
+    /* Or alternatively, you could use height: 100% */
 }
 
+/* Style for individual log messages - Increase font size here */
 .combat-log-entry {
-    font-size: 0.9em;
+    /* Increase font size relative to the container's font size */
+    /* 1.1em is 110% of the parent's font size. Try 1.15em or 1.2em if you want even larger text. */
+    font-size: 1.15em;
+    /* Adjust line height for better readability with larger text */
     line-height: 1.4;
+    /* Optional: Add padding for a bit more visual breathing room around each message */
+    padding: 2px 0;
+    /* Optional: Add word break to prevent very long words from overflowing */
+    word-break: break-word;
 }
 
 .combat-log-system {

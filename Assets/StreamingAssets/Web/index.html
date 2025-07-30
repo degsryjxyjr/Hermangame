@@ -58,31 +58,32 @@
 
             <div id="targetSelectionPrompt">Select a target for your action.</div>
 
-            <div class="combat-section">
+            <div class="combat-section lists-and-actions">
                 <h3>Players</h3>
                 <div id="playerListCombat" class="entity-list">
                     <!-- Player entities will be populated here by JS -->
                 </div>
             </div>
 
-            <div class="combat-section">
+            <div class="combat-section lists-and-actions">
                 <h3>Enemies</h3>
                 <div id="enemyListCombat" class="entity-list">
                     <!-- Enemy entities will be populated here by JS -->
                 </div>
             </div>
 
-            <div class="combat-section">
+            <div class="combat-section lists-and-actions">
                 <h3>Actions</h3>
                 <div id="availableActions">
                     <!-- Action buttons (abilities, items, etc.) will be populated here by JS -->
                 </div>
             </div>
 
-            <div class="combat-section">
+            <!-- This is the section for the combat log -->
+            <div class="combat-section combat-log-section">
                 <h3>Combat Log</h3>
                 <div id="combatLog">
-                    <div id="combatLogEntries"></div> <!-- Add this inner container -->
+                    <div id="combatLogEntries"></div>
                     <!-- Combat messages will appear here -->
                 </div>
             </div>
@@ -360,10 +361,31 @@
         }
         /* ---- INVENTORY UI END---- */
 
-        function logDebug(message) {
+        function logDebug(message, category = "system") { // Add category parameter
             const debugElement = document.getElementById('debugLog');
-            debugElement.innerHTML += `${new Date().toLocaleTimeString()}: ${message}<br>`;
-            debugElement.scrollTop = debugElement.scrollHeight;
+            const combatLogEntriesElement = document.getElementById('combatLogEntries'); // Get the inner container
+
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `${timestamp}: ${message}`;
+
+            if (isInCombat && combatLogEntriesElement) {
+                // --- Route to Combat Log ---
+                const entryEl = document.createElement('div');
+                // Use the category to style the message, defaulting to 'system' if not provided or invalid
+                const validCategories = ['player', 'enemy', 'system', 'damage', 'heal', 'info', 'warning', 'error', 'success'];
+                const logCategory = validCategories.includes(category) ? category : 'system';
+                entryEl.className = `combat-log-entry combat-log-${logCategory}`;
+                entryEl.textContent = `[${timestamp}] ${message}`; // Include timestamp in combat log entry text as well
+                combatLogEntriesElement.appendChild(entryEl);
+                // Scroll the specific log entries container
+                combatLogEntriesElement.scrollTop = combatLogEntriesElement.scrollHeight;
+            } else if (debugElement) {
+                // --- Route to Debug Log ---
+                debugElement.innerHTML += `${logEntry}<br>`;
+                debugElement.scrollTop = debugElement.scrollHeight;
+            }
+            // If neither element is found, the message is effectively discarded,
+            // which is fine as the elements might not exist in certain view states.
         }
 
         function populateClassList() {
@@ -669,7 +691,14 @@
 
         // --- Mode Entry/Exit ---
         function enterCombatMode() {
-            document.getElementById('combatPanel').style.display = 'block';
+            const combatPanel = document.getElementById('combatPanel');
+            if (combatPanel) {
+                combatPanel.style.display = 'block'; // Make panel visible FIRST
+                console.log("Combat panel set to display: block"); // Debug log
+            } else {
+                console.error("enterCombatMode: Could not find #combatPanel element!");
+                return; // Stop if panel doesn't exist
+            }
 
             // showing this for debuggin purposes
             const statsDisplay = document.getElementById('playerStatsDisplay');
@@ -685,11 +714,35 @@
 
             // Clear previous state/logs
             clearCombatLog();
-            // Initialize combat log
-            const combatLog = document.getElementById('combatLogEntries');
-            if (combatLog) {
-                combatLog.innerHTML = '<div class="combat-log-entry combat-log-system">Combat started!</div>';
+
+            // --- Correctly initialize combat log AFTER ensuring panel is visible ---
+            // Force a reflow/repaint might help in some cases, but let's try direct access first.
+            // Try accessing the element again after the panel is shown.
+            const combatLogEntries = document.getElementById('combatLogEntries');
+            if (combatLogEntries) {
+                console.log("Found #combatLogEntries element after showing panel."); // Debug log
+                // Clear it again just in case clearCombatLog affected it or there was old content
+                combatLogEntries.innerHTML = '';
+                // Add initial message to the inner container
+                const initialEntry = document.createElement('div');
+                initialEntry.className = 'combat-log-entry combat-log-system';
+                initialEntry.textContent = 'Combat started!';
+                combatLogEntries.appendChild(initialEntry);
+                // Good practice to scroll:
+                combatLogEntries.scrollTop = combatLogEntries.scrollHeight;
+            } else {
+                // If it's still not found, log a more detailed error
+                console.error("enterCombatMode: Still could not find #combatLogEntries element after showing #combatPanel!");
+                // Log the state of the parent
+                const combatLogParent = document.getElementById('combatLog');
+                console.log("#combatLog element:", combatLogParent);
+                if (combatLogParent) {
+                    console.log("#combatLog innerHTML:", combatLogParent.innerHTML);
+                }
             }
+            // --- End of Combat Log Initialization ---
+
+
             // Clear player/enemy lists if needed
             if (document.getElementById('playerListCombat')) document.getElementById('playerListCombat').innerHTML = '';
             if (document.getElementById('enemyListCombat')) document.getElementById('enemyListCombat').innerHTML = '';
@@ -1051,29 +1104,45 @@
             logCombatMessage(`You used ${actionType}.`, "player");
         }
 
+
         function logCombatMessage(message, category = "system") {
+            // Target the inner container explicitly
             const logContainer = document.getElementById('combatLogEntries');
             if (!logContainer) {
-                console.error("Combat log container not found!");
+                console.error("logCombatMessage: Combat log container (#combatLogEntries) not found!");
+                // Fallback to console if UI element is missing or hidden
+                console.log(`[Combat Log Fallback - ${category}]: ${message}`);
                 return;
             }
-            
             const entryEl = document.createElement('div');
-            entryEl.className = `combat-log-entry combat-log-${category}`;
+            // Validate category
+            const validCategories = ['player', 'enemy', 'system', 'damage', 'heal', 'info', 'warning', 'error', 'success'];
+            const logCategory = validCategories.includes(category) ? category : 'system';
+            entryEl.className = `combat-log-entry combat-log-${logCategory}`;
             entryEl.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
             logContainer.appendChild(entryEl);
+
+            // --- Ensure Auto-Scroll ---
+            // Simply set scrollTop to scrollHeight. The CSS change should make this work.
             logContainer.scrollTop = logContainer.scrollHeight;
-            
-            // Only log to debug if not in combat mode
-            if (!isInCombat) {
-                logDebug(message);
-            }
+            // --- End Auto-Scroll ---
         }
 
         function clearCombatLog() {
-            const logElement = document.getElementById('combatLog');
-            if (logElement) {
-                logElement.innerHTML = '';
+            // Target the inner container that holds the entries, not the parent container
+            const logEntriesElement = document.getElementById('combatLogEntries');
+            if (logEntriesElement) {
+                // Clear only the contents of the entries container
+                logEntriesElement.innerHTML = '';
+            } else {
+                // Fallback: if #combatLogEntries is missing for some reason, clear #combatLog
+                // This might be needed if clearCombatLog is called before enterCombatMode
+                // sets up the structure correctly, though ideally that shouldn't happen now.
+                console.warn("clearCombatLog: #combatLogEntries not found. Clearing #combatLog instead.");
+                const logElement = document.getElementById('combatLog');
+                if (logElement) {
+                    logElement.innerHTML = '';
+                }
             }
         }
 
@@ -1203,7 +1272,9 @@
 
         debugInterval = setInterval(() => {
             if (ws) {
-                logDebug(`Connection state: ${ws.readyState}`);
+                // switching debugging to console to prevent clutter in client log
+                //logDebug(`Connection state: ${ws.readyState}`);
+                console.log("WebSocket Connection state:", ws.readyState);
             }
         }, 5000);
     </script>

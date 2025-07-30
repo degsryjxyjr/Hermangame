@@ -30,6 +30,8 @@ public class ItemDefinition : ScriptableObject
     public int defenseModifier;
     public int magicModifier;
 
+    public int actionModifier;
+
     [Header("Linked Abilities (Complex Effects)")]
     [Tooltip("List of abilities granted or used by this item.")]
     public List<AbilityDefinition> linkedAbilities = new List<AbilityDefinition>(); 
