@@ -131,7 +131,6 @@ public class PlayerDataDebugWindow : EditorWindow
                 Debug.Log($"Updated {player.LobbyData?.Name}'s stats via debug window");
                 Repaint();
             }
-
             // Action Buttons
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Action Management(IN COMBAT ONLY!!!!!!)", EditorStyles.boldLabel);
