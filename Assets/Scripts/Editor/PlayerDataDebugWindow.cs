@@ -103,46 +103,62 @@ public class PlayerDataDebugWindow : EditorWindow
             EditorGUILayout.LabelField("Game Stats (Editable)", EditorStyles.boldLabel);
             EditorGUI.BeginChangeCheck(); // Start checking for changes
 
-            // Use the direct properties from the refactored PlayerConnection
+            // Add Total Actions field (editable)
+            int newTotalActions = EditorGUILayout.IntField("Total Actions", player.TotalActions);
+            EditorGUILayout.LabelField("Actions Remaining", player.ActionsRemaining.ToString());
+            
+            // Existing stats (keep these)
             int newMaxHealth = EditorGUILayout.IntField("Max Health", player.MaxHealth);
             int newCurrentHealth = EditorGUILayout.IntField("Current Health", player.CurrentHealth);
             int newAttack = EditorGUILayout.IntField("Attack", player.Attack);
             int newDefense = EditorGUILayout.IntField("Defense", player.Defense);
             int newMagic = EditorGUILayout.IntField("Magic", player.Magic);
-            int newLevel = EditorGUILayout.IntField("Level", player.Level);
-            int newExp = EditorGUILayout.IntField("Experience", player.Experience);
 
-            // If any stat field was changed, update the player's data
             if (EditorGUI.EndChangeCheck())
             {
-                // Clamp current health between 0 and the (potentially new) max health
-                newCurrentHealth = Mathf.Clamp(newCurrentHealth, 0, newMaxHealth);
-                newMaxHealth = Mathf.Max(1, newMaxHealth); // Ensure MaxHealth is at least 1
+                // Apply changes
+                player.TotalActions = Mathf.Max(1, newTotalActions);
+                
+                // Existing stat changes
+                player.MaxHealth = Mathf.Max(1, newMaxHealth);
+                player.CurrentHealth = Mathf.Clamp(newCurrentHealth, 0, player.MaxHealth);
+                player.Attack = Mathf.Max(0, newAttack);
+                player.Defense = Mathf.Max(0, newDefense);
+                player.Magic = Mathf.Max(0, newMagic);
 
-                // Update the direct properties on the PlayerConnection instance
-                player.MaxHealth = newMaxHealth;
-                player.CurrentHealth = newCurrentHealth;
-                player.Attack = newAttack;
-                player.Defense = newDefense;
-                player.Magic = newMagic;
-                player.Level = newLevel;
-                player.Experience = newExp;
-
-                // Send update to client so the UI reflects the change
-                GameServer.Instance.SendToPlayer(player.NetworkId, new
-                {
-                    type = "stats_update",
-                    currentHealth = player.CurrentHealth,
-                    maxHealth = player.MaxHealth,
-                    attack = player.Attack,
-                    defense = player.Defense,
-                    magic = player.Magic
-                    // Add other stats if needed by client
-                });
-                Debug.Log($"Stats updated for {player.LobbyData.Name} via Debug Window.");
-                // Repaint to reflect changes immediately
+                // Send update to client
+                player.SendStatsUpdateToClient();
+                Debug.Log($"Updated {player.LobbyData?.Name}'s stats via debug window");
                 Repaint();
             }
+
+            // Action Buttons
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Action Management(IN COMBAT ONLY!!!!!!)", EditorStyles.boldLabel);
+            EditorGUILayout.BeginHorizontal();
+            
+            if (GUILayout.Button("Reset Remaining Actions"))
+            {
+                player.ResetActionBudgetForNewTurn();
+                Debug.Log($"Reset actions for {player.LobbyData?.Name}");
+                Repaint();
+            }
+            
+            if (GUILayout.Button("+1 Remaining Action"))
+            {
+                player.ModifyCurrentActionBudget(1);
+                Debug.Log($"Added action to {player.LobbyData?.Name}");
+                Repaint();
+            }
+            
+            if (GUILayout.Button("-1 Remaining Action"))
+            {
+                player.ModifyCurrentActionBudget(-1);
+                Debug.Log($"Removed action from {player.LobbyData?.Name}");
+                Repaint();
+            }
+            
+            EditorGUILayout.EndHorizontal();
             // --- End Editable Game Stats ---
 
             // --- Updated Section: Inventory Actions ---
