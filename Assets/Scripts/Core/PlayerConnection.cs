@@ -3,11 +3,8 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
-// --- Interfaces (Ensure these are defined in separate files) ---
-// using Scripts/Core/IEntity.cs
-// using Scripts/Gameplay/Entities/IDamageable.cs
-// using Scripts/Gameplay/Entities/IHealable.cs
-// using Scripts/Data/DamageType.cs (enum)
+using System;
+
 
 /// <summary>
 /// Represents a connected player, holding lobby data, runtime game state,
@@ -23,10 +20,9 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
     // --- Lobby Data ---
     public LobbyPlayerData LobbyData { get; set; }
 
-    // --- Consolidated PlayerGameData Fields ---
+    // --- Consolidated player game data fields ---
     public PlayerClassDefinition ClassDefinition { get; set; }
-    public int Level { get; set; } = 1;
-    public int Experience { get; set; } = 0;
+    public Party CurrentParty { get; set; }
 
     // --- Action Budget Field ---
     // Base action counts (from ClassDefinition)
@@ -39,30 +35,73 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
     public int ActionsRemaining { get; private set; } = 1;
     // --- END Action Budget Fields ---
 
-    // --- Flattened Runtime Stats (formerly in PlayerGameData.RuntimeStats) ---
+    // --- Flattened Runtime Stats  ---
     public int CurrentHealth { get; set; }
     public int MaxHealth { get; set; }
     public int Attack { get; set; }
     public int Defense { get; set; }
     public int Magic { get; set; }
 
-    // --- Abilities and Inventory are managed by respective services ---
-    // Keeping a reference for initialization/stats if needed, but services manage lists
-    public List<AbilityDefinition> UnlockedAbilities { get; set; } = new List<AbilityDefinition>();
-    // Inventory is managed by InventoryService, no direct field needed here
+    // --- Ability Lists ---
+    /// <summary>
+    /// Abilities granted permanently to the player (e.g., class starting abilities, level-ups, quests).
+    /// These are not affected by equipping/unequipping items.
+    /// </summary>
+    public List<AbilityDefinition> PermanentAbilities { get; private set; } = new List<AbilityDefinition>();
 
-    // --- Reference Counting for Item-Granted Abilities ---
-    // Key: AbilityDefinition, Value: Number of equipped items granting this ability
-    private Dictionary<AbilityDefinition, int> _itemGrantedAbilityCounts = new Dictionary<AbilityDefinition, int>();
-    // --- End Reference Counting ---
+    /// <summary>
+    /// Abilities granted temporarily by equipped items.
+    /// These are added when an item is equipped and removed when it (or all items granting it) is unequipped.
+    /// </summary>
+    public List<AbilityDefinition> TransientAbilities { get; private set; } = new List<AbilityDefinition>();
 
+
+    // --- UnlockedAbilities as a Computed Property ---
+    /// <summary>
+    /// Gets a combined list of all abilities the player currently has unlocked,
+    /// including both permanent and transient abilities.
+    /// This property dynamically combines PermanentAbilities and TransientAbilities,
+    /// ensuring no duplicates. Use PermanentAbilities or TransientAbilities directly
+    /// for adding/removing based on source.
+    /// </summary>
+    public List<AbilityDefinition> UnlockedAbilities
+    {
+        get
+        {
+            // Create a new list starting with permanent abilities
+            var allAbilities = new List<AbilityDefinition>(PermanentAbilities);
+            
+            // Add transient abilities, avoiding duplicates
+            foreach (var transientAbility in TransientAbilities)
+            {
+                // Use ReferenceEquals or a unique ID check if object identity is problematic
+                // For ScriptableObjects, direct comparison usually works if it's the same asset instance.
+                if (transientAbility != null && !allAbilities.Contains(transientAbility)) 
+                {
+                    allAbilities.Add(transientAbility);
+                }
+            }
+            return allAbilities;
+        }
+    }
+    // --- END UnlockedAbilities ---
+
+
+
+    public int GetActionsRemaining() => ActionsRemaining;
+    public int GetTotalActions() => TotalActions;
 
     // --- Constructor ---
     public PlayerConnection(string networkId)
     {
         NetworkId = networkId;
+        LastActivityTime = Time.time;
+        ReconnectToken = Guid.NewGuid().ToString();
         // Stats will be initialized via InitializeStats() after ClassDefinition and Level are set
-        UnlockedAbilities = new List<AbilityDefinition>();
+
+        // Initialize lists
+        PermanentAbilities = new List<AbilityDefinition>();
+        TransientAbilities = new List<AbilityDefinition>();
         // LobbyData should be assigned after creation
     }
 
@@ -79,9 +118,9 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
             // Set defaults or handle error state
             MaxHealth = 100;
             CurrentHealth = MaxHealth;
-            Attack = 10;
-            Defense = 5;
-            Magic = 10;
+            Attack = 1;
+            Defense = 1;
+            Magic = 1;
             // ---  Default Action Budgets ---
             TotalActions = 1; // Unified actions
             ResetActionBudgetForNewTurn();
@@ -91,11 +130,11 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
 
         // Example calculations - adjust as needed based on your PlayerClassDefinition fields
         // Ensure growth curves (healthGrowth, attackGrowth etc.) exist in PlayerClassDefinition
-        MaxHealth = Mathf.FloorToInt(ClassDefinition.baseHealth * (ClassDefinition.healthGrowth?.Evaluate(Level) ?? 1.0f));
+        MaxHealth = ClassDefinition.baseHealth;
         CurrentHealth = MaxHealth; // Start at full health
-        Attack = Mathf.FloorToInt(ClassDefinition.baseAttack * (ClassDefinition.attackGrowth?.Evaluate(Level) ?? 1.0f));
-        Defense = Mathf.FloorToInt(ClassDefinition.baseDefense * (ClassDefinition.defenseGrowth?.Evaluate(Level) ?? 1.0f));
-        Magic = Mathf.FloorToInt(ClassDefinition.baseMagic * (ClassDefinition.magicGrowth?.Evaluate(Level) ?? 1.0f));
+        Attack = ClassDefinition.baseAttack;
+        Defense = ClassDefinition.baseDefense;
+        Magic = ClassDefinition.baseMagic;
 
         // --- Initialize Base Action Count ---
         TotalActions = ClassDefinition.baseActions;
@@ -103,13 +142,72 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
         ResetActionBudgetForNewTurn();
         // --- END ---
 
+        // --- Initialize Base Abilities ---
+        foreach (AbilityDefinition ability in ClassDefinition.startingAbilities)
+        {
+            // adding each ability in the list
+            AddPermanentAbility(ability);
+        }
 
-        Debug.Log($"Initialized stats for {LobbyData?.Name ?? "Unknown Player"} (Level {Level} {ClassDefinition.className}): " +
+
+
+        Debug.Log($"Initialized stats for {LobbyData?.Name ?? "Unknown Player"} (Level {CurrentParty.Level} {ClassDefinition.className}): " +
                   $"HP {CurrentHealth}/{MaxHealth}, ATK {Attack}, DEF {Defense}, MAG {Magic}, Actions {TotalActions}");
 
         // sending player name, class, level and xp etc
         SendStatsUpdateToClient();
     }
+
+    // Called on checkLevelUp from Party
+    public void LevelUp(int level)
+    {
+        // double checking the levelUp is valid
+        if (CurrentParty.Level != level)
+        {
+            Debug.Log($"Level Up to lvl.{level} for {LobbyData?.Name ?? "Unknown Player"} failed. Doesnt match party level!");
+            return;
+        }
+        // getting the lvl up data
+        LevelUpBonusData lvlUpData = ClassDefinition.GetBonusForLevel(level);
+        if (lvlUpData == null)
+        {
+            Debug.LogError($"PlayerConnection.LevelUp: ClassDefinition.levelUpBonuses[{level}] is null.");
+            return;
+        }
+
+        MaxHealth += lvlUpData.maxHealthBonus;
+        // CurrentHealth = MaxHealth; // Keep currentHeal the same. Might change in the future
+        Attack += lvlUpData.attackBonus;
+        Defense += lvlUpData.defenseBonus;
+        Magic += lvlUpData.magicBonus;
+
+        // --- Initialize Base Action Count ---
+        TotalActions += lvlUpData.actionBonus;
+        // Reset current budget to base values
+        ResetActionBudgetForNewTurn();
+        // --- END ---
+
+        // adding abilities
+        foreach (AbilityDefinition ability in lvlUpData.newAbilities)
+        {
+            // adding each ability in the list
+            AddPermanentAbility(ability);
+        }
+
+        // adding items
+        foreach (ItemDefinition item in lvlUpData.grantedItems)
+        {
+            // addding each item in the grantedItems list
+            InventoryService.Instance.AddItem(this.NetworkId, item);
+        }
+
+        Debug.Log($"Level Up! Lvl.{level} stats for {LobbyData?.Name ?? "Unknown Player"} (Level {CurrentParty.Level} {ClassDefinition.className}): " +
+                  $"HP {CurrentHealth}/{MaxHealth}, ATK {Attack}, DEF {Defense}, MAG {Magic}, Actions {TotalActions}");
+
+        // sending player name, class, level and xp etc
+        SendStatsUpdateToClient();
+    } 
+
 
 
     // --- Implementation of IEntity ---
@@ -219,21 +317,209 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
     }
     // --- End Implementation of IHealable ---
 
-    // --- Implementation of IEquipmentEffect ---
+
+    // --- Ability Management---
+
+    /// <summary>
+    /// Adds an ability to the player's permanently unlocked list.
+    /// This ability persists regardless of equipment changes.
+    /// </summary>
+    /// <param name="ability">The AbilityDefinition to grant permanently.</param>
+    /// <param name="sendUpdate">If true, sends a stats update to the client. Default is true.</param>
+    public void AddPermanentAbility(AbilityDefinition ability, bool sendUpdate = true)
+    {
+        if (ability == null)
+        {
+            Debug.LogWarning($"PlayerConnection ({LobbyData?.Name}): Attempted to add a null permanent ability.");
+            return;
+        }
+
+        if (!PermanentAbilities.Contains(ability))
+        {
+            PermanentAbilities.Add(ability);
+            Debug.Log($"PlayerConnection ({LobbyData?.Name}): Permanently granted ability '{ability.abilityName}'.");
+        }
+        else
+        {
+            Debug.Log($"PlayerConnection ({LobbyData?.Name}): Ability '{ability.abilityName}' is already permanently granted.");
+        }
+
+        // Optionally send an update to the client so the new ability appears in the UI
+        if (sendUpdate)
+        {
+            SendStatsUpdateToClient(); // This will now include the updated PermanentAbilities list
+        }
+    }
+
+    /// <summary>
+    /// Removes an ability from the player's permanently granted list.
+    /// Note: This does NOT automatically remove it from the effective UnlockedAbilities list
+    /// if it's also granted by a transient source (e.g., an equipped item).
+    /// </summary>
+    /// <param name="ability">The AbilityDefinition to revoke.</param>
+    /// <param name="sendUpdate">If true, sends a stats update to the client. Default is true.</param>
+    public void RemovePermanentAbility(AbilityDefinition ability, bool sendUpdate = true)
+    {
+        if (ability == null)
+        {
+            Debug.LogWarning($"PlayerConnection ({LobbyData?.Name}): Attempted to remove a null permanent ability.");
+            return;
+        }
+
+        if (PermanentAbilities.Contains(ability))
+        {
+            PermanentAbilities.Remove(ability);
+            Debug.Log($"PlayerConnection ({LobbyData?.Name}): Permanently revoked ability '{ability.abilityName}'.");
+
+            // Optionally send an update to the client
+            // The UnlockedAbilities property will now reflect the change if it wasn't also transient
+            if (sendUpdate)
+            {
+                SendStatsUpdateToClient(); 
+            }
+        }
+        else
+        {
+             Debug.Log($"PlayerConnection ({LobbyData?.Name}): Ability '{ability.abilityName}' was not found in permanently granted list.");
+        }
+    }
+
+    /// <summary>
+    /// Adds an ability to the player's transient (item-granted) list.
+    /// Checks if the ability is already present to avoid duplicates.
+    /// </summary>
+    /// <param name="ability">The AbilityDefinition to grant temporarily.</param>
+    /// <param name="sourceItemName">The name of the item granting the ability (for logging).</param>
+    /// <param name="sendUpdate">If true, sends a stats update to the client. Default is true.</param>
+    private void AddTransientAbility(AbilityDefinition ability, string sourceItemName, bool sendUpdate = true)
+    {
+        if (ability == null)
+        {
+            Debug.LogWarning($"PlayerConnection ({LobbyData?.Name}): Attempted to add a null transient ability from item '{sourceItemName}'.");
+            return;
+        }
+        // checking if the ability is already permanently granted
+        if (PermanentAbilities.Contains(ability))
+        {
+            Debug.Log($"PlayerConnection ({LobbyData?.Name}): Already has the permanent version of ability '{ability.abilityName}' (attempted grant from item '{sourceItemName}').");
+            return;
+        }
+        if (!TransientAbilities.Contains(ability))
+        {
+            TransientAbilities.Add(ability);
+            Debug.Log($"PlayerConnection ({LobbyData?.Name}): Granted transient ability '{ability.abilityName}' from item '{sourceItemName}'.");
+            if (sendUpdate)
+            {
+                SendStatsUpdateToClient();
+            }
+        }
+        else
+        {
+            Debug.Log($"PlayerConnection ({LobbyData?.Name}): Already has transient ability '{ability.abilityName}' (attempted grant from item '{sourceItemName}').");
+        }
+    }
+
+    /// <summary>
+    /// Removes an ability from the player's transient (item-granted) list.
+    /// Checks if another equipped item still grants the ability before removing.
+    /// </summary>
+    /// <param name="ability">The AbilityDefinition to revoke.</param>
+    /// <param name="sourceItemName">The name of the item being unequipped (for logging).</param>
+    /// <param name="sendUpdate">If true, sends a stats update to the client. Default is true.</param>
+    private void RemoveTransientAbility(AbilityDefinition ability, string sourceItemName, bool sendUpdate = true)
+    {
+        if (ability == null)
+        {
+            Debug.LogWarning($"PlayerConnection ({LobbyData?.Name}): Attempted to remove a null transient ability related to item '{sourceItemName}'.");
+            return;
+        }
+
+        // Check if ANY OTHER equipped item grants this ability
+        bool isGrantedByOtherItem = IsAbilityGrantedByOtherEquippedItem(ability, sourceItemName);
+
+        if (!isGrantedByOtherItem)
+        {
+            // No other item grants it, so remove it from TransientAbilities
+            if (TransientAbilities.Remove(ability))
+            {
+                Debug.Log($"PlayerConnection ({LobbyData?.Name}): Revoked transient ability '{ability.abilityName}' (unequipped '{sourceItemName}'). No other items grant it.");
+                if (sendUpdate)
+                {
+                    SendStatsUpdateToClient();
+                }
+            }
+            else
+            {
+                Debug.Log($"PlayerConnection ({LobbyData?.Name}): Attempted to revoke transient ability '{ability.abilityName}' (unequipped '{sourceItemName}'), but it was not found in the list.");
+            }
+        }
+        else
+        {
+            Debug.Log($"PlayerConnection ({LobbyData?.Name}): Transient ability '{ability.abilityName}' NOT revoked (unequipped '{sourceItemName}') because another equipped item grants it.");
+        }
+    }
+
+    /// <summary>
+    /// Helper method to check if an ability is granted by any other currently equipped item.
+    /// </summary>
+    /// <param name="ability">The ability to check.</param>
+    /// <param name="excludingItemName">The name of the item to exclude from the check (typically the one being unequipped).</param>
+    /// <returns>True if another equipped item grants the ability, false otherwise.</returns>
+    private bool IsAbilityGrantedByOtherEquippedItem(AbilityDefinition ability, string excludingItemName)
+    {
+        // This requires access to the player's equipped items, likely through InventoryService
+        if (InventoryService.Instance == null)
+        {
+            Debug.LogError("PlayerConnection.IsAbilityGrantedByOtherEquippedItem: InventoryService.Instance is null.");
+            return false; // Assume no other item grants it to be safe
+        }
+
+        // Get the player's equipped items
+        PlayerInventory playerInventory = InventoryService.Instance.GetPlayerInventory(this.NetworkId);
+
+        List<InventorySlot> equippedItemSlots = playerInventory.GetAllEquippedItems();
+
+        List<ItemDefinition> equippedItemDefs = new List<ItemDefinition>();
+
+        foreach (var itemSlot in equippedItemSlots)
+        {
+            equippedItemDefs.Add(itemSlot.ItemDef);
+        }
+
+        if (equippedItemDefs == null || equippedItemDefs.Count == 0)
+        {
+            return false; // No items equipped, so no other item grants it
+        }
+
+        foreach (var equippedItemDef in equippedItemDefs)
+        {
+            if (equippedItemDef != null && equippedItemDef.displayName != excludingItemName) // Exclude the item being unequipped
+            {
+                // Check if this equipped item grants the ability
+                if (equippedItemDef.linkedAbilities != null && equippedItemDef.linkedAbilities.Contains(ability))
+                {
+                    return true; // Found another item granting the ability
+                }
+            }
+        }
+        return false; // No other equipped item grants this ability
+    }
 
     /// <summary>
     /// Applies the effects of an equipped item to the player.
-    /// This method determines the type of effect and applies it.
+    /// Specifically handles adding abilities granted by the item.
+    /// Assumes item stat effects are handled by IEquipmentEffect scripts.
     /// </summary>
     /// <param name="equippedItem">The ItemDefinition of the item being equipped.</param>
-    // Inside PlayerManager.PlayerConnection.cs
     public void OnEquipItem(ItemDefinition equippedItem)
     {
         if (equippedItem == null)
         {
-            Debug.LogWarning("Attempted to equip a null item.");
+            Debug.LogWarning("PlayerConnection.OnEquipItem: Attempted to equip a null item.");
             return;
         }
+
+        Debug.Log($"PlayerConnection.OnEquipItem: Equipping item '{equippedItem.displayName}' for player '{LobbyData?.Name}'.");
 
         // Get the list of IEquipmentEffect scripts
         List<IEquipmentEffect> effects = equippedItem.GetEquipmentEffects();
@@ -247,64 +533,42 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
                 Debug.Log($"Applied equipment effect '{effect.GetType().Name}' from {equippedItem.displayName}.");
             }
         }
-        else
-        {
-            // Fallback to direct stat modification if no custom effects are found
-            ApplyBasicStatBonuses(equippedItem);
-            Debug.Log($"Applied basic stat bonuses from {equippedItem.displayName} (no custom effect scripts).");
-        }
         // Note: Individual effect scripts should handle sending stats_update if needed.
 
-        // 2. Grant Linked Abilities (with Reference Counting)
-        if (equippedItem.linkedAbilities != null)
+        // --- Handle Abilities Granted by Item ---
+        if (equippedItem.linkedAbilities != null && equippedItem.linkedAbilities.Count > 0)
         {
             foreach (var ability in equippedItem.linkedAbilities)
             {
                 if (ability != null)
                 {
-                    // Initialize count to 0 if not present
-                    if (!_itemGrantedAbilityCounts.ContainsKey(ability))
-                    {
-                        _itemGrantedAbilityCounts[ability] = 0;
-                    }
-
-                    // Increment count
-                    _itemGrantedAbilityCounts[ability]++;
-
-                    // Only add to UnlockedAbilities if:
-                    // 1. This is the first item granting it (count was 0, now 1)
-                    // AND 2. It's not already in UnlockedAbilities
-                    if (_itemGrantedAbilityCounts[ability] == 1 &&
-                        !this.UnlockedAbilities.Contains(ability))
-                    {
-                        this.UnlockedAbilities.Add(ability);
-                        Debug.Log($"Granted ability '{ability.abilityName}' from item '{equippedItem.displayName}' to player '{this.LobbyData.Name}' (RefCount: {_itemGrantedAbilityCounts[ability]})");
-                    }
-                    else
-                    {
-                        Debug.Log($"Player '{this.LobbyData.Name}' already knows ability '{ability.abilityName}'. Incremented item-grant RefCount to {_itemGrantedAbilityCounts[ability]} from item '{equippedItem.displayName}'");
-                    }
-                    // --- End Reference Counting Logic ---
+                    // Use the new centralized method
+                    AddTransientAbility(ability, equippedItem.displayName, sendUpdate: false); // Don't send update yet
                 }
             }
-            // sending statsUpdate so abilities are uptodate on the client side as well. 
-            // This fixes a bug where equipment granting abilities isnt communicated to client.
+            // Send one stats update after processing all abilities from the item
             SendStatsUpdateToClient();
         }
-        // --- End Grant Linked Abilities ---
     }
 
+
+    /// <summary>
+    /// Removes the effects of an unequipped item from the player.
+    /// Specifically handles removing abilities granted by the item (if no other item grants them).
+    /// Assumes item stat effects are handled by IEquipmentEffect scripts.
+    /// </summary>
+    /// <param name="unequippedItem">The ItemDefinition of the item being unequipped.</param>
     public void OnUnequipItem(ItemDefinition unequippedItem)
     {
         if (unequippedItem == null)
         {
-            Debug.LogWarning("Attempted to unequip a null item.");
+            Debug.LogWarning("PlayerConnection.OnUnequipItem: Attempted to unequip a null item.");
             return;
         }
 
+        Debug.Log($"PlayerConnection.OnUnequipItem: Unequipping item '{unequippedItem.displayName}' for player '{LobbyData?.Name}'.");
 
-        // 1. Remove Stat Bonuses (via IEquipmentEffect or direct)
-
+        // 1. Remove Stat Bonuses (via IEquipmentEffect)
         // Get the list of IEquipmentEffect scripts
         List<IEquipmentEffect> effects = unequippedItem.GetEquipmentEffects();
         if (effects.Count > 0)
@@ -316,152 +580,110 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
                 Debug.Log($"Removed equipment effect '{effect.GetType().Name}' from {unequippedItem.displayName}.");
             }
         }
-        else
-        {
-            // Fallback to removing direct stat modification
-            RemoveBasicStatBonuses(unequippedItem);
-            Debug.Log($"Removed basic stat bonuses from {unequippedItem.displayName} (no custom effect scripts).");
-        }
-        // Note: Individual effect scripts should handle sending stats_update if needed.
-
-
-        // 2. Revoke Linked Abilities (with Reference Counting)
-        if (unequippedItem.linkedAbilities != null)
+        // --- Handle Abilities Revoked by Item ---
+        if (unequippedItem.linkedAbilities != null && unequippedItem.linkedAbilities.Count > 0)
         {
             foreach (var ability in unequippedItem.linkedAbilities)
             {
-                if (ability != null && _itemGrantedAbilityCounts.ContainsKey(ability))
+                if (ability != null)
                 {
-                    // Decrement count
-                    _itemGrantedAbilityCounts[ability]--;
-
-                    // Only remove from UnlockedAbilities if:
-                    // 1. No more items grant this ability (count reached 0)
-                    // AND 2. The ability wasn't granted by other means (like class)
-                    if (_itemGrantedAbilityCounts[ability] <= 0)
-                    {
-                        _itemGrantedAbilityCounts.Remove(ability);
-
-                        // Only remove if the ability is marked as item-granted
-                        // (This is the key fix - we need to track permanent abilities separately)
-                        if (ShouldRemoveAbility(ability))
-                        {
-                            if (this.UnlockedAbilities.Remove(ability))
-                            {
-                                Debug.Log($"Revoked ability '{ability.abilityName}' from player '{this.LobbyData.Name}' (was granted by item '{unequippedItem.displayName}'). No other items grant it.");
-                            }
-                        }
-                    }
-                    else
-                    {
-                        Debug.Log($"Decremented item-grant RefCount for ability '{ability.abilityName}' to {_itemGrantedAbilityCounts[ability]} for player '{this.LobbyData.Name}' (unequipped '{unequippedItem.displayName}'). Ability NOT removed.");
-                    }
+                    // Use the new centralized method
+                    RemoveTransientAbility(ability, unequippedItem.displayName, sendUpdate: false); // Don't send update yet
                 }
             }
-            // sending statsUpdate so abilities are uptodate on the client side as well. 
-            // This fixes a bug where equipment granting abilities isnt communicated to client.
+            // Send one stats update after processing all abilities from the item
             SendStatsUpdateToClient();
         }
-        // --- End Revoke Linked Abilities ---
-
     }
 
-    // --- Helper methods for direct stat modification (used as fallback) ---
-    // These can also be the logic inside a default/standard IEquipmentEffect script like BasicStatBonusEffect.
 
-
-    private bool ShouldRemoveAbility(AbilityDefinition ability)
-    {
-        // If the ability is part of the class's permanent abilities, don't remove it
-        if (this.ClassDefinition != null &&
-            this.ClassDefinition.startingAbilities.Contains(ability))
-        {
-            return false;
-        }
-
-        // Add other checks here if you have other ways to permanently grant abilities
-
-        return true;
-    }
-
-    private void ApplyBasicStatBonuses(ItemDefinition item)
-    {
-        this.Attack += item.attackModifier;
-        this.Defense += item.defenseModifier;
-        this.Magic += item.magicModifier;
-        this.TotalActions += item.actionModifier;
-        // this.MaxHealth += item.healthModifier; // Add if used
-        Debug.Log($"Applied basic bonuses: +{item.attackModifier} ATK, +{item.defenseModifier} DEF, +{item.magicModifier} MAG, +{item.actionModifier} ACT");
-        SendStatsUpdateToClient();
-    }
-
-    private void RemoveBasicStatBonuses(ItemDefinition item)
-    {
-        this.Attack -= item.attackModifier;
-        this.Defense -= item.defenseModifier;
-        this.Magic -= item.magicModifier;
-        this.TotalActions -= item.actionModifier;
-        // this.MaxHealth -= item.healthModifier; // Subtract if used
-        this.Attack = Mathf.Max(0, this.Attack);
-        this.Defense = Mathf.Max(0, this.Defense);
-        this.Magic = Mathf.Max(0, this.Magic);
-        this.TotalActions = Mathf.Max(0, this.TotalActions);
-        // this.MaxHealth = Mathf.Max(1, this.MaxHealth); // Ensure minimum
-        // this.CurrentHealth = Mathf.Min(this.CurrentHealth, this.MaxHealth);
-        Debug.Log($"Removed basic bonuses: -{item.attackModifier} ATK, -{item.defenseModifier} DEF, -{item.magicModifier} MAG, -{item.actionModifier} ACT");
-        SendStatsUpdateToClient();
-    }
-
+     // --- Communication with Client ---
     /// <summary>
-    /// Sends the player's current stats to their client.
+    /// Sends the player's current stats (health, attack, etc.) and abilities to the client.
+    /// Updated to send Permanent and Transient abilities separately.
     /// </summary>
     public void SendStatsUpdateToClient()
     {
-
-        // --- Prepare Abilities Data ---
-        var abilitiesList = new System.Collections.Generic.List<object>();
-        foreach (var ability in this.UnlockedAbilities) 
+        if (GameServer.Instance == null)
         {
-            // Safely add ability data, checking for nulls
-            if (ability != null)
-            {
-                abilitiesList.Add(new {
-                    id = ability.name ?? "UnknownAbility", 
-                    name = ability.abilityName ?? ability.name ?? "Unnamed Ability", // Fallback chain
+            Debug.LogError("PlayerConnection.SendStatsUpdateToClient: GameServer.Instance is null.");
+            return;
+        }
 
-                    // supportedTargetTypes is List<AbilityDefinition.TargetType>
-                    // Select directly converts each TargetType enum value to its string representation
-                    targetTypes = ability.supportedTargetTypes != null ? 
-                                  ability.supportedTargetTypes.Select(t => t.ToString()).ToArray() : 
-                                  new string[] { "Unknown" }, 
-
-                    actionCost = ability.actionCost >= 0 ? ability.actionCost : 1 // Default cost if invalid
-                });
-            }
-            else
+        // Prepare base stats data
+        var statsData = new Dictionary<string, object>
+        {
+            ["type"] = "stats_update",
+            ["role"] = this.ClassDefinition?.className ?? "UnknownClass",
+            ["level"] = this.CurrentParty?.Level ?? 1,
+            ["experience"] = this.CurrentParty?.TotalExperience ?? 0,
+            ["currentHealth"] = this.CurrentHealth,
+            ["maxHealth"] = this.MaxHealth,
+            ["attack"] = this.Attack,
+            ["defense"] = this.Defense,
+            ["magic"] = this.Magic,
+            ["totalActions"] = this.TotalActions,
+            ["actionsRemaining"] = this.ActionsRemaining
+        };
+        
+        // list for all abilities
+        var abilityData = new List<Dictionary<string, object>>();
+        // Prepare Permanent Abilities data
+        if (PermanentAbilities != null)
+        {
+            foreach (var ability in PermanentAbilities)
             {
-                 // Log or handle null ability in the list if necessary
-                 Debug.LogWarning("PlayerConnection.SendStatsUpdateToClient: Found null ability in UnlockedAbilities list for player " + this.NetworkId);
+                if (ability != null)
+                {
+                    abilityData.Add(new Dictionary<string, object>
+                    {
+                        ["id"] = ability.name, // Or a unique ID
+                        ["name"] = ability.abilityName,
+                        ["targetTypes"] = ability.supportedTargetTypes?.Select(t => t.ToString()).ToArray() ?? new string[] { "Unknown" },
+                        ["actionCost"] = ability.actionCost >= 0 ? ability.actionCost : 1,
+                        ["iconPath"] = ability.icon != null ? $"images/icons/{ability.icon.name}.png" : "images/icons/default-ability.png"
+                        // Add other relevant ability properties for the client
+                    });
+                }
+                else
+                {
+                    Debug.LogWarning("PlayerConnection.SendStatsUpdateToClient: Found null ability in PermanentAbilities list.");
+                }
             }
         }
 
-        GameServer.Instance.SendToPlayer(this.NetworkId, new
+        // Prepare Transient Abilities data
+        if (TransientAbilities != null)
         {
-            type = "stats_update",
-            role = this.ClassDefinition.className, //role cause class is used by C
-            level = this.Level,
-            experience = this.Experience,
-            currentHealth = this.CurrentHealth,
-            maxHealth = this.MaxHealth,
-            attack = this.Attack,
-            defense = this.Defense,
-            magic = this.Magic,
-            // Add other stats as needed
-            abilities = abilitiesList
-        });
-    }
-    // --- End Implementation of IEquipmentEffect ---
+            foreach (var ability in TransientAbilities)
+            {
+                if (ability != null)
+                {
+                    abilityData.Add(new Dictionary<string, object>
+                    {
+                        ["id"] = ability.name, // Or a unique ID
+                        ["name"] = ability.abilityName,
+                        ["targetTypes"] = ability.supportedTargetTypes?.Select(t => t.ToString()).ToArray() ?? new string[] { "Unknown" },
+                        ["actionCost"] = ability.actionCost >= 0 ? ability.actionCost : 1,
+                        ["iconPath"] = ability.icon != null ? $"images/icons/{ability.icon.name}.png" : "images/icons/default-ability.png"
+                        // Add other relevant ability properties for the client
+                    });
+                }
+                else
+                {
+                    Debug.LogWarning("PlayerConnection.SendStatsUpdateToClient: Found null ability in TransientAbilities list.");
+                }
+            }
+        }
 
+        statsData["abilities"] = abilityData;
+
+        // Send the combined data to the player's client
+        GameServer.Instance.SendToPlayer(this.NetworkId, statsData);
+        Debug.Log($"PlayerConnection.SendStatsUpdateToClient: Sent stats and abilities update to player {LobbyData?.Name}.");
+    }
+
+    
     // --- IActionBudget Implementation ---
 
     /// <summary>

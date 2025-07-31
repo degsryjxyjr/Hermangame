@@ -108,10 +108,7 @@ public class LobbyService : MonoBehaviour
 
     private void InitializePlayerData()
     {
-        foreach (var player in _players)
-        {
-            PlayerManager.Instance.InitializeGameData(player);
-        }
+        PlayerManager.Instance.InitializeGameData(_players);
     }
 
     public void StartGame()

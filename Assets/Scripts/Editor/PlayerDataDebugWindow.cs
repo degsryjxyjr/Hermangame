@@ -49,6 +49,8 @@ public class PlayerDataDebugWindow : EditorWindow
         var players = playerManager.GetAllPlayers();
         int playerCount = players.Count;
 
+        // Show party info
+        DisplayPartyInformation();
         // Resize foldout arrays if player count changed
         // Need 3 foldouts per player: Details, Bag, Equipped
         int requiredFoldouts = playerCount * 3;
@@ -64,6 +66,158 @@ public class PlayerDataDebugWindow : EditorWindow
 
         EditorGUILayout.EndScrollView();
     }
+
+
+    // --- NEW METHOD: Display Party Information ---
+    /// <summary>
+    /// Displays information about the main player party in the debug window.
+    /// Structured to make adding support for multiple parties easier in the future.
+    /// </summary>
+    private void DisplayPartyInformation()
+    {
+        EditorGUILayout.Space();
+        EditorGUILayout.LabelField("Party Information", EditorStyles.boldLabel);
+
+        // Check if PlayerManager and its MainPlayerParty exist
+        if (PlayerManager.Instance != null && PlayerManager.Instance._mainPlayerParty != null)
+        {
+            Party mainParty = PlayerManager.Instance._mainPlayerParty;
+
+            // Display Party Level (Editable)
+            EditorGUI.BeginChangeCheck();
+            int newPartyLevel = EditorGUILayout.IntField("Party Level:", mainParty.Level);
+            if (EditorGUI.EndChangeCheck() && newPartyLevel != mainParty.Level && newPartyLevel > 0)
+            {
+                // Simple way to set level: adjust XP to just enough for the new level
+                // This is a basic example, a more robust system might involve directly setting XP
+                // or adding a method like SetLevel directly to the Party class.
+                if (newPartyLevel - 1 < 10) // Assuming XP_REQUIREMENTS has 10 elements (level 1-10)
+                {
+                    // WARNING: Accessing private fields like this requires reflection or making them public/internal.
+                    // This is for demonstration. Consider making Party.Level and TotalExperience setters public/internal.
+                    var levelProp = typeof(Party).GetProperty("Level", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    var xpProp = typeof(Party).GetProperty("TotalExperience", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+                    if (xpProp != null && levelProp != null)
+                    {
+                        long requiredXp = mainParty.GetRequiredXpForNextLevel();
+                        xpProp.SetValue(mainParty, requiredXp);
+                        levelProp.SetValue(mainParty, newPartyLevel);
+
+                        // Recalculate stats for all members if needed based on new level
+                        foreach (var member in mainParty.Members)
+                        {
+                            member?.SendStatsUpdateToClient(); // Trigger update with new level calculations
+                        }
+                        mainParty.SendPartyUpdateToMembers(); // Notify members of party level change
+                        Debug.Log($"Updated Main Party Level to {newPartyLevel} via debug window");
+                        Repaint();
+                    }
+                    else
+                    {
+                         Debug.LogError("Could not access Party.Level or Party.TotalExperience properties via reflection.");
+                    }
+                }
+                else
+                {
+                    Debug.LogWarning("Cannot set party level: Level index out of XP_REQUIREMENTS bounds (assuming max level 10 for demo).");
+                }
+            }
+
+            // Display Party Total Experience (Editable)
+            EditorGUI.BeginChangeCheck();
+            long newPartyExp = EditorGUILayout.LongField("Party Total Experience:", mainParty.TotalExperience);
+            if (EditorGUI.EndChangeCheck() && newPartyExp != mainParty.TotalExperience && newPartyExp >= 0)
+            {
+                 // WARNING: Accessing private fields like this requires reflection.
+                 var xpProp = typeof(Party).GetProperty("TotalExperience", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                 if (xpProp != null)
+                 {
+                     xpProp.SetValue(mainParty, newPartyExp);
+                     mainParty.CheckLevelUp(); // Check if this XP change causes a level up
+                     // Party.CheckLevelUp should handle sending updates if level changes
+                     Debug.Log($"Updated Main Party Total Experience to {newPartyExp} via debug window");
+                     Repaint();
+                 }
+                 else
+                 {
+                     Debug.LogError("Could not access Party.TotalExperience property via reflection.");
+                 }
+            }
+
+            // Display Party Members
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("Party Members:", EditorStyles.boldLabel);
+            EditorGUI.indentLevel++;
+            if (mainParty.Members != null && mainParty.Members.Count > 0)
+            {
+                foreach (var member in mainParty.Members)
+                {
+                    if (member != null)
+                    {
+                        EditorGUILayout.LabelField($"- {member.LobbyData?.Name ?? member.NetworkId}");
+                    }
+                    else
+                    {
+                        EditorGUILayout.LabelField("- [Null Member]");
+                    }
+                }
+            }
+            else
+            {
+                EditorGUILayout.LabelField("No members in the main party.");
+            }
+            EditorGUI.indentLevel--;
+
+            // Display Current Map Node (Editable)
+            EditorGUI.BeginChangeCheck();
+            string newMapNode = EditorGUILayout.TextField("Current Map Node ID:", mainParty.CurrentMapNodeId);
+            if (EditorGUI.EndChangeCheck() && newMapNode != mainParty.CurrentMapNodeId)
+            {
+                // WARNING: Accessing private fields like this requires reflection.
+                var nodeProp = typeof(Party).GetProperty("CurrentMapNodeId", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if(nodeProp != null)
+                {
+                    nodeProp.SetValue(mainParty, newMapNode);
+                    Debug.Log($"Updated Main Party Current Map Node ID to '{newMapNode}' via debug window");
+                    Repaint();
+                }
+                else
+                {
+                    Debug.LogError("Could not access Party.CurrentMapNodeId property via reflection.");
+                }
+            }
+
+            // --- Placeholder for Future Multiple Parties ---
+            // If you plan to support multiple parties, you could list them here
+            // and allow selecting one to display/edit details, or add buttons to create new parties.
+            /*
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField("All Parties (Future Expansion)", EditorStyles.boldLabel);
+            // Example: Iterate through a list/dictionary of parties from PlayerManager
+            // foreach(var partyInfo in PlayerManager.Instance.GetAllParties()) // Hypothetical method
+            // {
+            //    if (GUILayout.Button($"Select Party: {partyInfo.Id}")) // Hypothetical Id
+            //    {
+            //        // Logic to set a 'selectedParty' variable used by the above display/edit logic
+            //    }
+            // }
+            */
+
+
+        }
+        else
+        {
+            EditorGUILayout.LabelField("Main Player Party: Not Initialized");
+        }
+    }
+    // --- END NEW METHOD ---
+
+
+
+
+
+
 
     private void DrawPlayerData(PlayerConnection player, int playerIndex, InventoryService inventoryService)
     {
@@ -131,7 +285,6 @@ public class PlayerDataDebugWindow : EditorWindow
                 Debug.Log($"Updated {player.LobbyData?.Name}'s stats via debug window");
                 Repaint();
             }
-
             // Action Buttons
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Action Management(IN COMBAT ONLY!!!!!!)", EditorStyles.boldLabel);

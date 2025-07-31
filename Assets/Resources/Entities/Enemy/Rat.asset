@@ -117,12 +117,8 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  guaranteedLoot:
-  - item: {fileID: 11400000, guid: fd2c4ce97e15b844e9c12540a71dda30, type: 2}
-    dropChance: 1
-    minQuantity: 1
-    maxQuantity: 1
-  randomLoot: []
+  xpOnDefeat: 50
+  lootTable: []
   innateAbilities:
   - {fileID: 11400000, guid: 2a021f8ee1e8c644a96d96f44076d54d, type: 2}
   startingEquipment:

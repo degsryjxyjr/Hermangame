@@ -423,7 +423,24 @@ public class InventoryService : MonoBehaviour
         Debug.Log($"Sent inventory update to player {playerId} ({itemsToSend.Count} bag items, {equippedToSend.Count} equipped items).");
     }
 
-    // --- Helper Methods (Optional) ---
+    // --- Helper Methods  ---
+    /// <summary>
+    /// Gets a player's inventory by their ID.
+    /// </summary>
+    /// <param name="playerId">The ID of the player whose inventory to retrieve.</param>
+    /// <returns>The PlayerInventory instance if found, null otherwise.</returns>
+    public PlayerInventory GetPlayerInventory(string playerId)
+    {
+        if (_playerInventories.TryGetValue(playerId, out PlayerInventory inventory))
+        {
+            return inventory;
+        }
+        Debug.LogWarning($"Inventory not found for player ID: {playerId}");
+        return null;
+    }
+
+
+
     /// <summary>
     /// Finds the slot containing an item with the given ID (looks in bag).
     /// </summary>
