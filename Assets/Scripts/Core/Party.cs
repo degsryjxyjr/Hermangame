@@ -144,42 +144,150 @@ public class Party : IParty
             }
         }
     }
-
-    /// <inheritdoc />
+    
+    /// <summary>
+    /// Distributes a list of loot items to the active members of the party.
+    /// Ensures that every active member receives at least one item by cycling through the provided list if necessary.
+    /// Any excess items beyond the number of members are distributed randomly among the active members.
+    /// Each member receives a personalized notification listing the specific items they received.
+    /// </summary>
+    /// <param name="items">The list of ItemDefinitions to distribute.</param>
     public void GrantLoot(List<ItemDefinition> items)
     {
-        if (items == null || items.Count == 0) return;
-
-        // --- Simple Instant Share Implementation ---
-        // Just notify all members. Client decides how to handle (e.g., add to inventory, show popup).
-        // For a more complex system (shared pool, voting), logic would be more involved here.
-
-        var lootData = new Dictionary<string, object>
+        if (items == null || items.Count == 0)
         {
-            ["type"] = "loot_received",
-            ["items"] = items.Select(item => new Dictionary<string, object>
-             {
-                 ["id"] = item.name, // Or a unique ID if you have one
-                 ["name"] = item.displayName,
-                 ["iconPath"] = item.icon != null ? $"images/icons/{item.icon.name}.png" : "images/icons/default-item.png" // Adjust path as needed
-                 // Add other item properties relevant to the client
-             }).ToList()
-        };
-        int i = 0;
-        foreach (var member in Members)
-        {
-            if (member != null && GameServer.Instance != null) // Check for nulls
-            {
-                // Currently giving loot items to all players. Need to randomly distribute them later!!
-                InventoryService.Instance.AddItem(member.NetworkId, items[i]);
-
-                // the lootData needs to be fixed. just a placeholder for now
-                GameServer.Instance.SendToPlayer(member.NetworkId, lootData);
-                i++;
-             }
+            Debug.Log("Party.GrantLoot: No items to distribute.");
+            return;
         }
 
-        Debug.Log($"Party granted loot: {string.Join(", ", items.Select(i => i.displayName))}");
+        // Get active members to ensure loot goes to players who can receive it
+        List<PlayerConnection> activeMembers = this.GetActiveMembers();
+
+        if (activeMembers == null || activeMembers.Count == 0)
+        {
+            Debug.LogWarning("Party.GrantLoot: No active members to distribute loot to.");
+            return;
+        }
+
+        Debug.Log($"Party.GrantLoot: Distributing {items.Count} items to {activeMembers.Count} active members (ensuring everyone gets at least one if possible).");
+
+        // --- Distribute Items Ensuring Everyone Gets At Least One (if items list is not empty) ---
+        System.Random rng = new System.Random(); // Use System.Random for consistent randomness
+
+        // Prepare a list to hold messages for each member about items they received
+        Dictionary<PlayerConnection, List<ItemDefinition>> memberLoot = new Dictionary<PlayerConnection, List<ItemDefinition>>();
+
+        // 1. Ensure each active member gets at least one item (cycle through items if necessary)
+        if (items != null && items.Count > 0) // Double-check items list is valid
+        {
+            for (int i = 0; i < activeMembers.Count; i++)
+            {
+                PlayerConnection member = activeMembers[i];
+                // Cycle through the items list using modulo
+                ItemDefinition itemToGive = items[i % items.Count];
+
+                if (itemToGive != null && member != null)
+                {
+                    // Add the item to the member's inventory
+                    if (InventoryService.Instance != null)
+                    {
+                        bool itemAdded = InventoryService.Instance.AddItem(member.NetworkId, itemToGive, 1);
+
+                        if (itemAdded)
+                        {
+                            Debug.Log($"Party.GrantLoot: Ensured item '{itemToGive.displayName}' given to player '{member.LobbyData?.Name ?? member.NetworkId}' (Item #{i + 1}/{activeMembers.Count}).");
+
+                            // Track the item for the member's loot notification
+                            if (!memberLoot.ContainsKey(member))
+                            {
+                                memberLoot[member] = new List<ItemDefinition>();
+                            }
+                            memberLoot[member].Add(itemToGive);
+                        }
+                        else
+                        {
+                            Debug.LogWarning($"Party.GrantLoot: Failed to add ensured item '{itemToGive.displayName}' to player '{member.LobbyData?.Name ?? member.NetworkId}' inventory.");
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogError("Party.GrantLoot: InventoryService.Instance is null during ensure-everyone-gets-one phase.");
+                    }
+                }
+            }
+        }
+
+        // 2. Distribute any remaining items randomly (only if there were more items than members)
+        if (items.Count > activeMembers.Count)
+        {
+            int extraItemsToDistribute = items.Count - activeMembers.Count;
+            Debug.Log($"Party.GrantLoot: Distributing {extraItemsToDistribute} extra items randomly.");
+
+            for (int i = activeMembers.Count; i < items.Count; i++)
+            {
+                ItemDefinition extraItem = items[i];
+                if (extraItem == null) continue; // Safety check
+
+                // Select a random active member to receive this extra item
+                int randomIndex = rng.Next(activeMembers.Count);
+                PlayerConnection recipient = activeMembers[randomIndex];
+
+                // Add the item to the recipient's inventory
+                if (InventoryService.Instance != null && recipient != null)
+                {
+                    bool itemAdded = InventoryService.Instance.AddItem(recipient.NetworkId, extraItem, 1);
+
+                    if (itemAdded)
+                    {
+                        Debug.Log($"Party.GrantLoot: Extra item '{extraItem.displayName}' randomly granted to player '{recipient.LobbyData?.Name ?? recipient.NetworkId}'.");
+
+                        // Track the item for the recipient's loot notification
+                        if (!memberLoot.ContainsKey(recipient))
+                        {
+                            memberLoot[recipient] = new List<ItemDefinition>();
+                        }
+                        memberLoot[recipient].Add(extraItem);
+                    }
+                    else
+                    {
+                        Debug.LogWarning($"Party.GrantLoot: Failed to add extra item '{extraItem.displayName}' to player '{recipient.LobbyData?.Name ?? recipient.NetworkId}' inventory.");
+                    }
+                }
+                else
+                {
+                    Debug.LogError("Party.GrantLoot: InventoryService.Instance or recipient is null during extra item distribution phase.");
+                }
+            }
+        }
+
+
+        // --- Notify Members of Their Loot ---
+        // Send a personalized loot message to each member who received items
+        foreach (var memberLootEntry in memberLoot)
+        {
+            PlayerConnection member = memberLootEntry.Key;
+            List<ItemDefinition> receivedItems = memberLootEntry.Value;
+
+            if (member != null && GameServer.Instance != null && receivedItems != null && receivedItems.Count > 0)
+            {
+                var memberLootData = new Dictionary<string, object>
+                {
+                    ["type"] = "loot_received",
+                    ["items"] = receivedItems.Select(item => new Dictionary<string, object>
+                    {
+                        ["id"] = item.name, // Or a unique ID if you have one
+                        ["name"] = item.displayName,
+                        ["iconPath"] = item.icon != null ? $"images/icons/{item.icon.name}.png" : "images/icons/default-item.png"
+                        // Add other item properties relevant to the client
+                    }).ToList()
+                };
+
+                GameServer.Instance.SendToPlayer(member.NetworkId, memberLootData);
+                Debug.Log($"Party.GrantLoot: Sent loot notification to player '{member.LobbyData?.Name ?? member.NetworkId}' for {receivedItems.Count} item(s).");
+            }
+        }
+
+        Debug.Log($"Party.GrantLoot: Finished distributing items (everyone got at least one if items existed).");
     }
 
 

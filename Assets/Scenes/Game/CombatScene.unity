@@ -539,7 +539,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 684aa6c303dca0743aa9c8beae26ff75, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  testEnemyDefinition: {fileID: 11400000, guid: feef605e4fb57b14f8dbb340a4d1f420, type: 2}
+  testEnemyDefinition: {fileID: 0}
   enemyList: {fileID: 1927800061}
 --- !u!4 &1155483849
 Transform:
