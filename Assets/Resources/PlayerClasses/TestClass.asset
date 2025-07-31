@@ -33,10 +33,10 @@ MonoBehaviour:
   levelUpBonuses:
   - targetLevel: 2
     maxHealthBonus: 50
-    attackBonus: 5
-    defenseBonus: 5
-    magicBonus: 5
-    actionBonus: 5
+    attackBonus: 1
+    defenseBonus: 1
+    magicBonus: 1
+    actionBonus: 0
     newAbilities:
     - {fileID: 11400000, guid: c9e1694568f4ef34c803fbda7ee82d2b, type: 2}
     grantedItems:

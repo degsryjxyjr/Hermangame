@@ -24,6 +24,8 @@ public class PlayerManager : MonoBehaviour
     private InventoryService _inventory;
     private ClassManager _class;
 
+    private TradingService _trade;
+
     public Party _mainPlayerParty { get; private set; }
 
     private void Awake()
@@ -50,7 +52,8 @@ public class PlayerManager : MonoBehaviour
         _inventory = gameObject.AddComponent<InventoryService>();
         _class  = gameObject.AddComponent<ClassManager>();
         _abilityExecution  = gameObject.AddComponent<AbilityExecutionService>();
-        Debug.Log($"Services initialized: Lobby={_lobby != null}, Combat={_combat != null}, Class={_class != null}, Inventory={_inventory != null}, AbilityExec={_abilityExecution != null}");
+        _trade = gameObject.AddComponent<TradingService>();
+        Debug.Log($"Services initialized: Lobby={_lobby != null}, Combat={_combat != null}, Class={_class != null}, Inventory={_inventory != null}, AbilityExec={_abilityExecution != null}, Trading={_trade != null}");
     }
 
     private void Update()
@@ -98,6 +101,12 @@ public class PlayerManager : MonoBehaviour
                     {
                         Debug.LogError("InventoryService reference is null when trying to handle inventory message");
                     }
+                    break;
+
+                // --- Trade Messages ---
+                case "trade":
+                    // Forward trade messages to TradingService
+                    TradingService.Instance?.HandleTradeMessage(sessionId, msg);
                     break;
 
                 default:
@@ -306,13 +315,18 @@ public class PlayerManager : MonoBehaviour
                             _lobby.OnPlayerDisconnected(connection);
                         }
                         break;
-                        
+
                     case GameStateManager.GameState.Combat:
                         if (_combat != null)
                         {
                             Debug.Log("Notifying combat system of disconnect");
                             _combat.OnPlayerDisconnected(connection);
+                            TradingService.Instance?.OnPlayerDisconnected(connection.NetworkId);
                         }
+                        break;
+                    case GameStateManager.GameState.Map:
+                        Debug.Log("Notifying trading system of disconnect");
+                        TradingService.Instance?.OnPlayerDisconnected(connection.NetworkId);
                         break;
                 }
             }

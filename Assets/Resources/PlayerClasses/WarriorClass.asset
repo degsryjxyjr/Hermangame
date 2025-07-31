@@ -28,6 +28,13 @@ MonoBehaviour:
   - {fileID: 11400000, guid: c3cffd64c3ec3ed468e60ac1e728ae4c, type: 2}
   - {fileID: 11400000, guid: fd2c4ce97e15b844e9c12540a71dda30, type: 2}
   - {fileID: 11400000, guid: 20d3eb609a4f1dd428326e8d80f343dc, type: 2}
-  - {fileID: 11400000, guid: 89a2956f9484fef4e96f861cfc34bc2c, type: 2}
-  - {fileID: 11400000, guid: cc78b082d600044478d43388a21a0e16, type: 2}
-  levelUpBonuses: []
+  levelUpBonuses:
+  - targetLevel: 2
+    maxHealthBonus: 25
+    attackBonus: 3
+    defenseBonus: 1
+    magicBonus: 0
+    actionBonus: 0
+    newAbilities: []
+    grantedItems:
+    - {fileID: 11400000, guid: 89a2956f9484fef4e96f861cfc34bc2c, type: 2}

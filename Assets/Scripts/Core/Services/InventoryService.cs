@@ -38,6 +38,36 @@ public class InventoryService : MonoBehaviour
         _playerInventories[playerId] = inventory;
         Debug.Log($"Initialized inventory for player {playerId} with {startingItems.Count} starting items.");
     }
+    
+
+
+    /// <summary>
+    /// Gets an ItemDefinition by its ID from the cached items.
+    /// </summary>
+    /// <param name="itemId">The ID of the item to find.</param>
+    /// <returns>The ItemDefinition if found, null otherwise.</returns>
+    public ItemDefinition GetItemDefinition(string itemId)
+    {
+        if (string.IsNullOrEmpty(itemId))
+        {
+            Debug.LogWarning("GetItemDefinition: itemId is null or empty");
+            return null;
+        }
+
+        // Search through all cached items
+        foreach (var itemDef in allItems)
+        {
+            if (itemDef != null && itemDef.itemId == itemId)
+            {
+                return itemDef;
+            }
+        }
+
+        Debug.LogWarning($"GetItemDefinition: Item with ID '{itemId}' not found");
+        return null;
+    }
+
+
 
     // --- Item Management ---
     /// <summary>
@@ -65,11 +95,109 @@ public class InventoryService : MonoBehaviour
 
         if (success)
         {
-             // TODO: Notify client about inventory change if needed immediately
-             // Or rely on the caller to send updates
+            // TODO: Notify client about inventory change if needed immediately
+            // Or rely on the caller to send updates
         }
         return success;
     }
+
+    /// <summary>
+    /// Transfers a specified quantity of an item from one player's inventory to another's.
+    /// This is an atomic operation: either both the removal and addition succeed, or neither does.
+    /// </summary>
+    /// <param name="fromPlayerId">The NetworkId of the player giving the item.</param>
+    /// <param name="toPlayerId">The NetworkId of the player receiving the item.</param>
+    /// <param name="itemId">The ID of the item to transfer.</param>
+    /// <param name="quantity">The quantity to transfer.</param>
+    /// <returns>True if the transfer was successful, false otherwise.</returns>
+    public bool TransferItem(string fromPlayerId, string toPlayerId, string itemId, int quantity)
+    {
+        if (string.IsNullOrEmpty(fromPlayerId) || string.IsNullOrEmpty(toPlayerId) || string.IsNullOrEmpty(itemId) || quantity <= 0)
+        {
+            Debug.LogWarning("InventoryService.TransferItem: Invalid arguments.");
+            return false;
+        }
+
+        if (fromPlayerId == toPlayerId)
+        {
+            Debug.LogWarning("InventoryService.TransferItem: Cannot transfer item to the same player.");
+            return false;
+        }
+
+        if (!_playerInventories.TryGetValue(fromPlayerId, out PlayerInventory fromInventory))
+        {
+            Debug.LogWarning($"InventoryService.TransferItem: Source inventory for player {fromPlayerId} not found.");
+            return false;
+        }
+
+        if (!_playerInventories.TryGetValue(toPlayerId, out PlayerInventory toInventory))
+        {
+            Debug.LogWarning($"InventoryService.TransferItem: Target inventory for player {toPlayerId} not found.");
+            return false;
+        }
+
+        // --- Validation: Check source has enough ---
+        // Find the item slot in the source player's bag
+        var sourceItemSlot = fromInventory.BagItems.Find(slot => slot.itemId == itemId);
+        if (sourceItemSlot == null || sourceItemSlot.quantity < quantity)
+        {
+            Debug.LogWarning($"InventoryService.TransferItem: Player {fromPlayerId} does not have enough {itemId} to transfer ({sourceItemSlot?.quantity ?? 0} < {quantity}).");
+            return false;
+        }
+
+        // --- Validation: Check target has space (optional, depends on your inventory system) ---
+        // If your inventory has a hard limit, check it here.
+        // For simplicity, we assume AddItem handles space checks.
+        // You might want to pre-check if adding 'quantity' of 'itemId' would fit in 'toInventory'.
+
+        // --- Perform Transfer ---
+        Debug.Log($"InventoryService.TransferItem: Transferring {quantity}x {itemId} from {fromPlayerId} to {toPlayerId}.");
+
+        // 1. Remove from source
+        bool removed = RemoveItem(fromPlayerId, itemId, quantity);
+        if (!removed)
+        {
+            // This should ideally not happen if validation passed, but check anyway
+            Debug.LogError($"InventoryService.TransferItem: Failed to remove {quantity}x {itemId} from {fromPlayerId} during transfer.");
+            return false;
+        }
+
+        // 2. Add to target
+        // converting itemId to ItemDefention for AddItem function
+        bool added = AddItem(toPlayerId, GetItemDefinition(itemId) , quantity);
+        if (!added)
+        {
+            // If adding fails, we should ideally roll back the removal.
+            // This is a simple implementation. A more robust one might use transactions/try-add patterns.
+            Debug.LogError($"InventoryService.TransferItem: Failed to add {quantity}x {itemId} to {toPlayerId}. Attempting rollback...");
+            // Rollback: Try to add the item back to the source
+            bool rollbackSuccess = AddItem(fromPlayerId, GetItemDefinition(itemId), quantity);
+            if (!rollbackSuccess)
+            {
+                Debug.LogError($"InventoryService.TransferItem: CRITICAL FAILURE - Rollback failed! {quantity}x {itemId} lost during transfer from {fromPlayerId}.");
+                // In a real game, you'd have serious error handling/recovery here.
+            }
+            else
+            {
+                Debug.Log($"InventoryService.TransferItem: Rollback successful. {quantity}x {itemId} returned to {fromPlayerId}.");
+            }
+            return false;
+        }
+
+        // --- Transfer Successful ---
+        Debug.Log($"InventoryService.TransferItem: Transfer of {quantity}x {itemId} from {fromPlayerId} to {toPlayerId} completed.");
+        // Optionally send inventory updates to both players here, or let the caller do it
+        // SendInventoryUpdate(fromPlayerId);
+        // SendInventoryUpdate(toPlayerId);
+        return true;
+    }
+
+
+
+
+
+
+
 
     // --- Item Usage ---
     /// <summary>
@@ -157,8 +285,8 @@ public class InventoryService : MonoBehaviour
 
                         ////As inventorySerivce handles item use we need to tell what the useContext is.
                         // We fetch the game state from gameStateManager and pass it to abilityExecutionService
-                        var useContext = GameStateManager.Instance.GetCurrentGameState() == GameStateManager.GameState.Combat 
-                            ? AbilityExecutionService.AbilityContext.InCombat 
+                        var useContext = GameStateManager.Instance.GetCurrentGameState() == GameStateManager.GameState.Combat
+                            ? AbilityExecutionService.AbilityContext.InCombat
                             : AbilityExecutionService.AbilityContext.OutOfCombat;
 
                         // Call the correct method on the AbilityExecutionService singleton
@@ -239,7 +367,7 @@ public class InventoryService : MonoBehaviour
 
             case ItemDefinition.ItemType.Equipment:
                 Debug.Log($"Toggling equipment: {itemSlotToUse.ItemDef.displayName} (ID: {itemSlotToUse.itemId}) for player {player.LobbyData.Name}");
-                
+
                 // --- KEY CHANGE 1: Declare variable for the unequipped item ---
                 InventorySlot unequippedSlot = null;
                 // --- END KEY CHANGE 1 ---
@@ -247,9 +375,9 @@ public class InventoryService : MonoBehaviour
                 // 6a. Delegate to the PlayerInventory's equip logic to handle state changes
                 // This handles moving the item instance between Bag/Equipped dict and toggling isEquipped flag.
                 // --- KEY CHANGE 2: Pass the out parameter ---
-                itemUsed = inventory.EquipItem(itemId, out unequippedSlot); 
+                itemUsed = inventory.EquipItem(itemId, out unequippedSlot);
                 // --- END KEY CHANGE 2 ---
-                
+
                 if (itemUsed)
                 {
                     // --- KEY CHANGE 3: Handle the unequipped item effects FIRST ---
@@ -284,7 +412,7 @@ public class InventoryService : MonoBehaviour
                     Debug.LogWarning($"Failed to toggle equipment state for item {itemSlotToUse.ItemDef.displayName}.");
                 }
                 break;
-                
+
             default:
                 Debug.Log($"No use behavior defined for item type: {itemSlotToUse.ItemDef.itemType} (Item: {itemSlotToUse.ItemDef.displayName})");
                 itemUsed = false;
