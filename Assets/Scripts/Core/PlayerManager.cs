@@ -24,6 +24,8 @@ public class PlayerManager : MonoBehaviour
     private InventoryService _inventory;
     private ClassManager _class;
 
+    public Party _mainPlayerParty { get; private set; }
+
     private void Awake()
     {
         if (Instance != null)
@@ -428,26 +430,70 @@ public class PlayerManager : MonoBehaviour
         return _activeConnections.ContainsKey(sessionId);
     }
 
-    public void InitializeGameData(PlayerConnection connection)
+    // Modify the method signature to accept the list of players for the party
+    // Remove the old single PlayerConnection parameter version or make it obsolete/private
+    public void InitializeGameData(List<PlayerConnection> playersForParty)
     {
-        var classDef = ClassManager.Instance.GetAvailableClasses()
-            .FirstOrDefault(c => c.className == connection.LobbyData.Role);
-        if (classDef == null)
+        if (playersForParty == null || playersForParty.Count == 0)
         {
-            Debug.LogError($"Class definition not found for: {connection.LobbyData.Role}");
-            classDef = ClassManager.Instance.GetAvailableClasses().First();   // fallback
+            Debug.LogError("PlayerManager: Cannot initialize game data, player list is null or empty.");
+            return;
         }
-        // --- UPDATED: Assign to direct property ---
-        connection.ClassDefinition = classDef;
-        // --- UPDATED: Call the new initialization method ---
-        // Ensure Level is set if needed before calling InitializeStats.
-        // Currently, it uses the default Level = 1 from PlayerConnection.
-        connection.InitializeStats();
-        // --- UPDATED: Assign to direct property ---
-        connection.UnlockedAbilities = new List<AbilityDefinition>(classDef.startingAbilities);
-        // Initialize inventory through InventoryService
-        _inventory.InitializeInventory(connection.NetworkId, classDef.startingEquipment);
-        Debug.Log($"Initialized {connection.LobbyData.Name} as {classDef.className}");
+
+        Debug.Log($"PlayerManager: Initializing game data for {playersForParty.Count} players.");
+
+        // --- 1. Create the Main Party ---
+        _mainPlayerParty = new Party(playersForParty);
+        Debug.Log("PlayerManager: Main player party created.");
+
+        // --- 2. Initialize Individual Player Data ---
+        // Iterate through the players passed in (which are now the party members)
+        foreach (var connection in playersForParty)
+        {
+            if (connection == null) continue; // Safety check
+
+            // --- Find the PlayerClassDefinition ---
+            // Use the Role (which should be the class name) from LobbyData
+            string className = connection.LobbyData?.Role ?? "UnknownClass";
+            var classDef = ClassManager.Instance.GetAvailableClasses()
+                                            .FirstOrDefault(c => c.className == className);
+
+            if (classDef == null)
+            {
+                Debug.LogError($"PlayerManager: Class definition '{className}' not found for player {connection.LobbyData?.Name ?? connection.NetworkId}. Using fallback.");
+                // Use a fallback class, e.g., the first available one
+                var availableClasses = ClassManager.Instance.GetAvailableClasses();
+                if (availableClasses != null && availableClasses.Count > 0)
+                {
+                    classDef = availableClasses[0]; // Or handle error more gracefully
+                }
+                else
+                {
+                    Debug.LogError("PlayerManager: No player classes available!");
+                    // Cannot proceed without a class definition
+                    continue; // Skip this player
+                }
+            }
+
+            // --- Create and Assign Player Game Data ---
+            connection.ClassDefinition = classDef;
+            connection.InitializeStats();
+            // --- UPDATED: Assign to direct property ---
+            connection.UnlockedAbilities = new List<AbilityDefinition>(classDef.startingAbilities);
+            // Initialize inventory through InventoryService
+            _inventory.InitializeInventory(connection.NetworkId, classDef.startingEquipment);
+
+            Debug.Log($"PlayerManager: Game data initialized for {connection.LobbyData?.Name ?? connection.NetworkId} (Class: {classDef.className}, Level: {_mainPlayerParty.Level}).");
+
+            // --- Optional: Send Initial Stats to Client ---
+            // This ensures the client has the initial stats based on class and level
+            connection.SendStatsUpdateToClient();
+        }
+
+        // --- 3. Notify Party Members of Initial State ---
+        // Send the initial party state (level, XP - which is 0, members) to all members
+        _mainPlayerParty.SendPartyUpdateToMembers();
+        Debug.Log("PlayerManager: Initial party state sent to members.");
     }
     #endregion
 

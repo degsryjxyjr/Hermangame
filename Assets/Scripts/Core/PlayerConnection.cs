@@ -25,8 +25,7 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
 
     // --- Consolidated PlayerGameData Fields ---
     public PlayerClassDefinition ClassDefinition { get; set; }
-    public int Level { get; set; } = 1;
-    public int Experience { get; set; } = 0;
+    public Party CurrentParty { get; set; }
 
     // --- Action Budget Field ---
     // Base action counts (from ClassDefinition)
@@ -91,11 +90,11 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
 
         // Example calculations - adjust as needed based on your PlayerClassDefinition fields
         // Ensure growth curves (healthGrowth, attackGrowth etc.) exist in PlayerClassDefinition
-        MaxHealth = Mathf.FloorToInt(ClassDefinition.baseHealth * (ClassDefinition.healthGrowth?.Evaluate(Level) ?? 1.0f));
+        MaxHealth = Mathf.FloorToInt(ClassDefinition.baseHealth * (ClassDefinition.healthGrowth?.Evaluate(CurrentParty.Level) ?? 1.0f));
         CurrentHealth = MaxHealth; // Start at full health
-        Attack = Mathf.FloorToInt(ClassDefinition.baseAttack * (ClassDefinition.attackGrowth?.Evaluate(Level) ?? 1.0f));
-        Defense = Mathf.FloorToInt(ClassDefinition.baseDefense * (ClassDefinition.defenseGrowth?.Evaluate(Level) ?? 1.0f));
-        Magic = Mathf.FloorToInt(ClassDefinition.baseMagic * (ClassDefinition.magicGrowth?.Evaluate(Level) ?? 1.0f));
+        Attack = Mathf.FloorToInt(ClassDefinition.baseAttack * (ClassDefinition.attackGrowth?.Evaluate(CurrentParty.Level) ?? 1.0f));
+        Defense = Mathf.FloorToInt(ClassDefinition.baseDefense * (ClassDefinition.defenseGrowth?.Evaluate(CurrentParty.Level) ?? 1.0f));
+        Magic = Mathf.FloorToInt(ClassDefinition.baseMagic * (ClassDefinition.magicGrowth?.Evaluate(CurrentParty.Level) ?? 1.0f));
 
         // --- Initialize Base Action Count ---
         TotalActions = ClassDefinition.baseActions;
@@ -104,7 +103,7 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
         // --- END ---
 
 
-        Debug.Log($"Initialized stats for {LobbyData?.Name ?? "Unknown Player"} (Level {Level} {ClassDefinition.className}): " +
+        Debug.Log($"Initialized stats for {LobbyData?.Name ?? "Unknown Player"} (Level {CurrentParty.Level} {ClassDefinition.className}): " +
                   $"HP {CurrentHealth}/{MaxHealth}, ATK {Attack}, DEF {Defense}, MAG {Magic}, Actions {TotalActions}");
 
         // sending player name, class, level and xp etc
@@ -449,8 +448,8 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
         {
             type = "stats_update",
             role = this.ClassDefinition.className, //role cause class is used by C
-            level = this.Level,
-            experience = this.Experience,
+            level = this.CurrentParty.Level,
+            experience = this.CurrentParty.TotalExperience,
             currentHealth = this.CurrentHealth,
             maxHealth = this.MaxHealth,
             attack = this.Attack,
