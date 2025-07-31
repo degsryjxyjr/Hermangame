@@ -41,9 +41,28 @@ public class EnemyDefinition : ScriptableObject
         public int maxQuantity = 1;
     }
 
-    [Header("Loot")]
-    public List<LootItem> guaranteedLoot = new List<LootItem>(); // Always dropped
-    public List<LootItem> randomLoot = new List<LootItem>();   // Chance-based drops
+    // --- : Reward Fields ---
+    [Header("Rewards")]
+    [Tooltip("Experience points awarded to the party when this enemy is defeated.")]
+    public int xpOnDefeat = 0;
+
+    [System.Serializable]
+    public class LootDropEntry
+    {
+        [Tooltip("The item that can be dropped.")]
+        public ItemDefinition item;
+        [Tooltip("The chance (0.0 to 1.0) that this item will drop.")]
+        [Range(0f, 1f)]
+        public float dropChance = 0.1f;
+        [Tooltip("Minimum amount that can drop (if item is stackable).")]
+        public int minAmount = 1;
+        [Tooltip("Maximum amount that can drop (if item is stackable).")]
+        public int maxAmount = 1;
+    }
+
+    [Tooltip("List of potential items this enemy can drop upon defeat.")]
+    public List<LootDropEntry> lootTable;
+    // --- END NEW ---
 
     [Header("Abilities")]
     public List<AbilityDefinition> innateAbilities = new List<AbilityDefinition>(); // Abilities the enemy can use

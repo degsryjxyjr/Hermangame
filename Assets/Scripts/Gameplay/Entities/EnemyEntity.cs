@@ -21,6 +21,31 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
     public int Defense { get; private set; }
     public int Magic { get; private set; }
 
+    public int XpOnDefeat { get; private set; }
+
+    //  Method to generate loot list based on the definition's table
+    // This centralizes the loot roll logic within the EnemyEntity
+    public List<ItemDefinition> GenerateLoot()
+    {
+        List<ItemDefinition> droppedItems = new List<ItemDefinition>();
+
+        if (_enemyDefinition?.lootTable != null)
+        {
+            foreach (var lootEntry in _enemyDefinition.lootTable)
+            {
+                if (lootEntry.item != null && UnityEngine.Random.value <= lootEntry.dropChance)
+                {
+                    // For simplicity, add one item. You can add logic for amount if needed.
+                    // If items become stackable, you'd handle quantity here.
+                    droppedItems.Add(lootEntry.item);
+                    Debug.Log($"EnemyEntity ({GetEntityName()}): Rolled loot drop - {lootEntry.item.displayName}");
+                }
+            }
+        }
+
+        return droppedItems;
+    }
+    // --- END NEW ---
 
     // --- Action Budget Field ---
     // Base action count (from ClassDefinition)
@@ -90,6 +115,8 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
         Attack = Mathf.FloorToInt(_enemyDefinition.baseAttack * _enemyDefinition.attackGrowth.Evaluate(level));
         Defense = Mathf.FloorToInt(_enemyDefinition.baseDefense * _enemyDefinition.defenseGrowth.Evaluate(level));
         Magic = Mathf.FloorToInt(_enemyDefinition.baseMagic * _enemyDefinition.magicGrowth.Evaluate(level));
+
+        XpOnDefeat = _enemyDefinition.xpOnDefeat;
 
         // --- Initialize Action Count --
         TotalActions = _enemyDefinition?.baseActions ?? 1;
@@ -197,33 +224,7 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
     /// </summary>
     private void OnDeath()
     {
-        // 1. Determine loot drops
-        List<ItemDefinition> droppedItems = new List<ItemDefinition>();
-        // a. Add guaranteed loot
-        foreach (var lootItem in _enemyDefinition.guaranteedLoot)
-        {
-            if (lootItem.item != null)
-            {
-                int quantity = UnityEngine.Random.Range(lootItem.minQuantity, lootItem.maxQuantity + 1);
-                for (int i = 0; i < quantity; i++)
-                {
-                    droppedItems.Add(lootItem.item);
-                }
-            }
-        }
-        // b. Roll for random loot
-        foreach (var lootItem in _enemyDefinition.randomLoot)
-        {
-            if (lootItem.item != null && UnityEngine.Random.value <= lootItem.dropChance)
-            {
-                int quantity = UnityEngine.Random.Range(lootItem.minQuantity, lootItem.maxQuantity + 1);
-                for (int i = 0; i < quantity; i++)
-                {
-                    droppedItems.Add(lootItem.item);
-                }
-            }
-        }
-
+    
         // 2. Notify EncounterManager (NEW)
         // This is the key change. The enemy tells the manager it died.
         if (EncounterManager != null)

@@ -14,118 +14,31 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   className: OnlyForTesting
   classIcon: {fileID: 10901, guid: 0000000000000000f000000000000000, type: 0}
-  description: test class
+  description: test class for debugging
   baseHealth: 100
-  baseAttack: 0
-  baseDefense: 0
-  baseMagic: 0
+  baseAttack: 1
+  baseDefense: 1
+  baseMagic: 1
   attackRange: 1
   baseActions: 2
   characterPrefab: {fileID: 7235997375035445226, guid: 487c0c6d42be8b14485c3bb804d3bc62, type: 3}
   animatorController: {fileID: 0}
   startingAbilities:
-  - {fileID: 11400000, guid: 0e9b66ba14f3bfb448a5cfd540bdf6de, type: 2}
-  - {fileID: 11400000, guid: e2ca85e47cf37814da14dd9ee4cbd0fe, type: 2}
+  - {fileID: 11400000, guid: 35f1582846efbad4ba1ae43d23dead45, type: 2}
   startingEquipment:
   - {fileID: 11400000, guid: fd2c4ce97e15b844e9c12540a71dda30, type: 2}
-  - {fileID: 11400000, guid: fd2c4ce97e15b844e9c12540a71dda30, type: 2}
   - {fileID: 11400000, guid: 20d3eb609a4f1dd428326e8d80f343dc, type: 2}
-  - {fileID: 11400000, guid: 89a2956f9484fef4e96f861cfc34bc2c, type: 2}
   - {fileID: 11400000, guid: 69927346d4c63504cb76633e9f940e05, type: 2}
   - {fileID: 11400000, guid: c3cffd64c3ec3ed468e60ac1e728ae4c, type: 2}
-  healthGrowth:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 34
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 1
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 34
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
-  attackGrowth:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 34
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 1
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 34
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
-  defenseGrowth:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 34
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 1
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 34
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
-  magicGrowth:
-    serializedVersion: 2
-    m_Curve:
-    - serializedVersion: 3
-      time: 0
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 34
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    - serializedVersion: 3
-      time: 1
-      value: 1
-      inSlope: 0
-      outSlope: 0
-      tangentMode: 34
-      weightedMode: 0
-      inWeight: 0
-      outWeight: 0
-    m_PreInfinity: 2
-    m_PostInfinity: 2
-    m_RotationOrder: 4
+  levelUpBonuses:
+  - targetLevel: 2
+    maxHealthBonus: 50
+    attackBonus: 5
+    defenseBonus: 5
+    magicBonus: 5
+    actionBonus: 5
+    newAbilities:
+    - {fileID: 11400000, guid: c9e1694568f4ef34c803fbda7ee82d2b, type: 2}
+    grantedItems:
+    - {fileID: 11400000, guid: cc78b082d600044478d43388a21a0e16, type: 2}
+    - {fileID: 11400000, guid: 89a2956f9484fef4e96f861cfc34bc2c, type: 2}

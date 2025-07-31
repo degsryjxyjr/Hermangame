@@ -63,6 +63,15 @@ public class Party : IParty
             // TODO: Potentially grant stat bonuses based on PlayerClassDefinition growth curves
             // This would involve iterating Members and calling methods on their GameData/Entities
             // For now, just log. Implement stat bonus logic here later.
+            foreach (var member in Members)
+            {
+                if (member != null && GameServer.Instance != null)
+                {
+                    // call levelUp function for each player and pass the new level
+                    member.LevelUp(Level);
+                }
+            }
+
 
             // Send a specific level up notification
             BroadcastLevelUp();
@@ -156,12 +165,17 @@ public class Party : IParty
                  // Add other item properties relevant to the client
              }).ToList()
         };
-
+        int i = 0;
         foreach (var member in Members)
         {
-             if (member != null && GameServer.Instance != null) // Check for nulls
-             {
-                 GameServer.Instance.SendToPlayer(member.NetworkId, lootData);
+            if (member != null && GameServer.Instance != null) // Check for nulls
+            {
+                // Currently giving loot items to all players. Need to randomly distribute them later!!
+                InventoryService.Instance.AddItem(member.NetworkId, items[i]);
+
+                // the lootData needs to be fixed. just a placeholder for now
+                GameServer.Instance.SendToPlayer(member.NetworkId, lootData);
+                i++;
              }
         }
 

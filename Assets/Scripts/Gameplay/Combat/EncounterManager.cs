@@ -31,6 +31,11 @@ public class EncounterManager : MonoBehaviour
     [Tooltip("Drag a Transform here for the enemy spawnpoint.")]
     public Transform enemyList;
 
+    // --- NEW: Fields to accumulate rewards ---
+    private long _totalXpAccumulated = 0;
+    private List<ItemDefinition> _potentialLootAccumulated = new List<ItemDefinition>();
+    // --- END NEW ---
+
 
     private EncounterState _currentState = EncounterState.NotStarted;
 
@@ -88,7 +93,7 @@ public class EncounterManager : MonoBehaviour
     /// <summary>
     /// Starts the encounter with the given players and enemy definitions.
     /// </summary>
-    public void StartEncounter(List<PlayerConnection> players, List<EnemyDefinition> enemyDefinitions /*, other encounter details */)
+    public void StartEncounter(Party party, List<EnemyDefinition> enemyDefinitions, List<ItemDefinition> lootTable = null /*, other encounter details */)
     {
         if (_currentState != EncounterState.NotStarted)
         {
@@ -98,8 +103,15 @@ public class EncounterManager : MonoBehaviour
         Debug.Log("EncounterManager: Starting new encounter.");
         _currentState = EncounterState.Active;
 
+
+        // if lootTable is passed set _potentialLootAccumulated to it
+        if (lootTable != null)
+        {
+            _potentialLootAccumulated = lootTable;
+        }
+
         // 1. Add Players
-        foreach (var player in players)
+        foreach (var player in party.Members)
         {
             if (player != null)
             {
@@ -108,7 +120,7 @@ public class EncounterManager : MonoBehaviour
                 AddPlayer(player);
             }
         }
-        CombatService.Instance.StartCombat(players);
+        CombatService.Instance.StartCombat(party);
         // 2. Spawn and Add Enemies
         foreach (var enemyDef in enemyDefinitions)
         {
@@ -332,6 +344,23 @@ public class EncounterManager : MonoBehaviour
         }
 
         Debug.Log($"EncounterManager: Enemy {enemy.GetEntityName()} has been defeated.");
+
+
+        // --- NEW: Accumulate Rewards ---
+        // Accumulate XP
+        _totalXpAccumulated += enemy.XpOnDefeat;
+        Debug.Log($"EncounterManager: Accumulated {enemy.XpOnDefeat} XP from {enemy.GetEntityName()}. Total XP so far: {_totalXpAccumulated}");
+
+        // Accumulate Potential Loot
+        List<ItemDefinition> enemyLoot = enemy.GenerateLoot(); // Let EnemyEntity handle the roll
+        if (enemyLoot != null && enemyLoot.Count > 0)
+        {
+            _potentialLootAccumulated.AddRange(enemyLoot);
+            Debug.Log($"EncounterManager: Accumulated {enemyLoot.Count} potential loot items from {enemy.GetEntityName()}.");
+        }
+        // --- END NEW ---
+
+
         _activeEnemies.Remove(enemy);
         _activeEnemiesDict.Remove(enemy.GetInstanceID()); // Or use its unique ID if you have one
 
@@ -369,9 +398,13 @@ public class EncounterManager : MonoBehaviour
         // Check if all enemies are dead
         if (_activeEnemies.All(e => !e.IsAlive()))
         {
-            Debug.Log("EncounterManager: All enemies defeated. Player victory!");
+            Debug.Log("EncounterManager: All enemies defeated. Victory!");
             _currentState = EncounterState.Victory;
-            EndEncounter();
+
+            // --- Distribute Accumulated Rewards on Victory ---
+            DistributeRewardsOnVictory();
+
+            EndEncounter(); // This will trigger OnEncounterEnded event
             return true;
         }
 
@@ -389,7 +422,54 @@ public class EncounterManager : MonoBehaviour
         return "Unknown Entity";
     }
 
-    
+    // --- Method to Distribute Rewards ---
+    /// <summary>
+    /// Distributes the accumulated XP and loot to the player party.
+    /// Called when the encounter ends in victory.
+    /// </summary>
+    private void DistributeRewardsOnVictory()
+    {
+        // Ensure PlayerManager and MainPlayerParty exist
+        if (PlayerManager.Instance == null)
+        {
+            Debug.LogError("EncounterManager.DistributeRewardsOnVictory: PlayerManager.Instance is null.");
+            return;
+        }
+
+        Party playerParty = PlayerManager.Instance._mainPlayerParty; // Assuming single main party
+        if (playerParty == null)
+        {
+            Debug.LogError("EncounterManager.DistributeRewardsOnVictory: PlayerManager.MainPlayerParty is null.");
+            return;
+        }
+
+        // --- Distribute XP ---
+        if (_totalXpAccumulated > 0)
+        {
+            Debug.Log($"EncounterManager: Distributing {_totalXpAccumulated} XP to the party.");
+            playerParty.AddExperience(_totalXpAccumulated);
+            // Reset accumulator
+            _totalXpAccumulated = 0;
+        }
+        else
+        {
+            Debug.Log("EncounterManager: No XP to distribute.");
+        }
+
+        // --- Distribute Loot ---
+        if (_potentialLootAccumulated != null && _potentialLootAccumulated.Count > 0)
+        {
+            Debug.Log($"EncounterManager: Distributing {_potentialLootAccumulated.Count} loot items to the party.");
+            playerParty.GrantLoot(_potentialLootAccumulated);
+            // Reset accumulator
+            _potentialLootAccumulated.Clear();
+        }
+        else
+        {
+            Debug.Log("EncounterManager: No loot to distribute.");
+        }
+    }
+    // --- END NEW ---
 
 
     private void EndEncounter()

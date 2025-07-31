@@ -267,7 +267,7 @@ public class PlayerInventory
         }
     }
 
-
+    
     /// <summary>
     /// Gets all items currently in the bag.
     /// </summary>

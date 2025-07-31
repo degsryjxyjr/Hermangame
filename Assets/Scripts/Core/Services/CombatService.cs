@@ -40,7 +40,7 @@ public class CombatService : MonoBehaviour
     /// Initializes the combat service for a new encounter.
     /// Finds or creates the EncounterManager and starts the encounter.
     /// </summary>
-    public void InitializeForEncounter(List<PlayerConnection> players, List<EnemyDefinition> enemiesToSpawn)
+    public void InitializeForEncounter(Party party, List<EnemyDefinition> enemiesToSpawn, List<ItemDefinition> lootTable = null)
     {
         Debug.Log("CombatService: Initializing for new encounter.");
 
@@ -74,7 +74,8 @@ public class CombatService : MonoBehaviour
         // TODO: Get actual enemy definitions based on the encounter details
         //List<EnemyDefinition> enemiesToSpawn = new List<EnemyDefinition>(); // Placeholder
         // Example: enemiesToSpawn.Add(Resources.Load<EnemyDefinition>("Enemies/Goblin"));
-        _encounterManager.StartEncounter(players, enemiesToSpawn /*, other details */);
+
+        _encounterManager.StartEncounter(party, enemiesToSpawn, lootTable /*, other details */);
 
         // The EncounterManager will now spawn enemies, set up turn order, and notify us via events.
     }
@@ -807,7 +808,7 @@ public class CombatService : MonoBehaviour
     /// <summary>
     /// Starts a combat encounter. (Placeholder logic, needs EncounterManager)
     /// </summary>
-    public void StartCombat(List<PlayerConnection> players /*, Encounter details */)
+    public void StartCombat(Party party /*, Encounter details */)
     {
         _isInCombat = true;
         // TODO: Initialize EncounterManager with players and enemies
@@ -832,6 +833,7 @@ public class CombatService : MonoBehaviour
         {
             result = "victory";
             message = "Victory! You have defeated the enemies!";
+
         }
         else if (_encounterManager.CurrentState == EncounterManager.EncounterState.Defeat)
         {

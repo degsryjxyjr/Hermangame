@@ -149,15 +149,18 @@ public class GameStateManager : MonoBehaviour
                 // --- Handle Combat Initialization AFTER scene load ---
                 Debug.Log("GameStateManager: Entering Combat state logic (scene should be loaded). Initializing encounter...");
                 // Gather players for the encounter
-                List<PlayerConnection> playersInCombat = PlayerManager.Instance.GetAllPlayers();
+                Party partyInCombat = PlayerManager.Instance.GetParty();
 
                 CombatService combatService = CombatService.Instance;
                 if (combatService != null)
                 {
                     // --- CLEANED UP: Prepare encounter data ---
-                    List<PlayerConnection> playersForEncounter = playersInCombat;
+                    // List<PlayerConnection> playersForEncounter = playersInCombat;
                     List<EnemyDefinition> enemiesForEncounter = new List<EnemyDefinition>();
+                    // setting the lootTable
+                    List<ItemDefinition> lootTable = new List<ItemDefinition>();
 
+                    lootTable.Add(Resources.Load<ItemDefinition>("Items/ActionRing"));
                     // Load the test enemy
                     EnemyDefinition goblinDef = Resources.Load<EnemyDefinition>("Entities/Enemy/Rat");
                     if (goblinDef != null)
@@ -173,7 +176,7 @@ public class GameStateManager : MonoBehaviour
 
                     // Pass both player and enemy lists
                     // This will now run in the context of the CombatScene
-                    combatService.InitializeForEncounter(playersForEncounter, enemiesForEncounter);
+                    combatService.InitializeForEncounter(partyInCombat, enemiesForEncounter, lootTable);
                     // --- END CLEANED UP ---
                 }
                 else

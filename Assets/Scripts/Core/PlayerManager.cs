@@ -166,7 +166,7 @@ public class PlayerManager : MonoBehaviour
                 Role = className,
                 IsReady = false
             },
-            // --- REMOVED: GameData = ScriptableObject.CreateInstance<PlayerGameData>(), ---
+            
             LastActivityTime = Time.time,
             ReconnectToken = Guid.NewGuid().ToString()
         };
@@ -425,6 +425,11 @@ public class PlayerManager : MonoBehaviour
         return _activeConnections.Values.ToList();
     }
 
+    public Party GetParty()
+    {
+        return _mainPlayerParty;
+    }
+
     public bool IsPlayerConnected(string sessionId)
     {
         return _activeConnections.ContainsKey(sessionId);
@@ -478,8 +483,8 @@ public class PlayerManager : MonoBehaviour
             // --- Create and Assign Player Game Data ---
             connection.ClassDefinition = classDef;
             connection.InitializeStats();
-            // --- UPDATED: Assign to direct property ---
-            connection.UnlockedAbilities = new List<AbilityDefinition>(classDef.startingAbilities);
+            // Abilities added by InitializeStats
+
             // Initialize inventory through InventoryService
             _inventory.InitializeInventory(connection.NetworkId, classDef.startingEquipment);
 
