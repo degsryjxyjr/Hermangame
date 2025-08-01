@@ -1025,11 +1025,10 @@
                         abilityBtn.title = `Targets: ${ability.targetTypes.join(', ')}`;
                     } else {
                         abilityBtn.title = `Targets: Unknown`;
-                    }
-                    
-                    // Just graying out button if not enough actions remaining. As server will still handle validation!
+                    }                
+                    // Just graying out button if not enough total actions. Server will still handle validation!
                     const actionCost = ability.actionCost || 1;
-                    if (playerStats.actionsRemaining < actionCost) {
+                    if (playerStats.totalActions < actionCost) {
                         abilityBtn.classList.add('unaffordable');
                     } else {
                         abilityBtn.classList.remove('unaffordable');

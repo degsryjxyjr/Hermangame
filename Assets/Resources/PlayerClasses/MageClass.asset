@@ -21,7 +21,7 @@ MonoBehaviour:
   baseMagic: 10
   attackRange: 1
   baseActions: 1
-  characterPrefab: {fileID: 7235997375035445226, guid: 8ae16999080efa54ba8dd2e0466ad3dc, type: 3}
+  characterPrefab: {fileID: 7235997375035445226, guid: 71fb50dedda6e6e4b91e6b853b699613, type: 3}
   animatorController: {fileID: 0}
   startingAbilities:
   - {fileID: 11400000, guid: e2ca85e47cf37814da14dd9ee4cbd0fe, type: 2}
