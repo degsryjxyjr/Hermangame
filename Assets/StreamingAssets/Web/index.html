@@ -132,8 +132,6 @@
             </div> <!-- End trade-sections-container -->
 
             <div class="trade-actions">
-                <button id="tradeAddItem">Add Item</button>
-                <button id="tradeRemoveItem">Remove Item</button>
                 <button id="tradeConfirm">Confirm Trade</button>
                 <button id="tradeCancel">Cancel Trade</button>
             </div>
@@ -1582,51 +1580,6 @@
             });
             // --- END NEW ---
 
-            // --- NEW: Trade View Action Buttons ---
-            document.getElementById('tradeAddItem')?.addEventListener('click', function() {
-                if (!isTradeActive || !currentTradeSessionId) {
-                    logTradeMessage("Not in an active trade session.", 'warn');
-                    return;
-                }
-                // --- MODIFIED: Instead of prompt, inform user to click items ---
-                logTradeMessage("Please click on an item in 'Your Inventory' section to add it to the trade.", 'info');
-                // Highlight the inventory section visually if desired
-                const inventorySection = this.closest('.trade-section'); // Or find #tradeYourInventory parent
-                if (inventorySection) {
-                    inventorySection.style.border = '2px solid #4CAF50'; // Flash green border
-                    setTimeout(() => {
-                        inventorySection.style.border = ''; // Remove border after a short time
-                    }, 1000);
-                }
-
-            });
-
-            document.getElementById('tradeRemoveItem')?.addEventListener('click', function() {
-                if (!isTradeActive || !currentTradeSessionId) {
-                    logTradeMessage("Not in an active trade session.", 'warn');
-                    return;
-                }
-                // Placeholder: Open a dialog or select from offered items
-                // Simulate removing an item
-                const itemIdToRemove = prompt("Enter Item ID to remove from trade:", "item_wood");
-                const quantityStr = prompt("Enter quantity to remove:", "1");
-                const quantityToRemove = parseInt(quantityStr, 10);
-
-                if (itemIdToRemove && !isNaN(quantityToRemove) && quantityToRemove > 0) {
-                    sendMessage({
-                        type: "trade",
-                        trade_action: "remove_item",
-                        session_id: currentTradeSessionId, // Include session ID
-                        item_id: itemIdToRemove,
-                        quantity: quantityToRemove
-                    });
-                    logTradeMessage(`Attempting to remove ${quantityToRemove}x ${itemIdToRemove} from trade.`, 'info');
-                    // Update local offer *optimistically* or wait for server confirmation?
-                    // Let's wait for server confirmation via handleTradeUpdate for now.
-                } else {
-                    logTradeMessage("Invalid item ID or quantity for removing.", 'warn');
-                }
-            });
 
             document.getElementById('tradeConfirm')?.addEventListener('click', function() {
                 if (!isTradeActive || !currentTradeSessionId) {
