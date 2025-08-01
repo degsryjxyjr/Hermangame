@@ -37,6 +37,8 @@ public class InventoryService : MonoBehaviour
         inventory.InitializeWithItems(startingItems);
         _playerInventories[playerId] = inventory;
         Debug.Log($"Initialized inventory for player {playerId} with {startingItems.Count} starting items.");
+        // sending players the first inventory update
+        SendInventoryUpdate(playerId);
     }
     
 

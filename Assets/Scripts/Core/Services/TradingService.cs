@@ -173,7 +173,8 @@ public class TradingService : MonoBehaviour
         // Notify target (request received)
         GameServer.Instance.SendToPlayer(targetId, new Dictionary<string, object>
         {
-            ["type"] = "trade_request",
+            ["type"] = "trade_status",
+            ["status"] = "trade_request",
             ["requester_player_id"] = requesterId,
             ["requester_player_name"] = requester.LobbyData?.Name ?? "Unknown",
             ["session_id"] = sessionId
@@ -348,7 +349,9 @@ public class TradingService : MonoBehaviour
             ["update_type"] = "partner_item_added",
             ["partner_id"] = playerId,
             ["item_id"] = itemId,
-            ["quantity"] = quantity
+            ["item_name"] = itemSlot.ItemDef.displayName,
+            ["quantity"] = quantity,
+            ["icon"] = $"images/icons/{itemSlot.ItemDef.itemId}"
             // Optionally include item name/icon path if needed client-side immediately
         });
     }
