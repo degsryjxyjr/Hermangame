@@ -480,10 +480,15 @@ button {
     background-color: #1976d2;
 }
 
-.action-btn:disabled {
-    background-color: #616161;
-    cursor: not-allowed;
-    opacity: 0.6;
+/* Replace or add these styles */
+.action-btn.unaffordable {
+    opacity: 0.7;
+    filter: grayscale(70%);
+}
+
+.action-btn.unaffordable:hover {
+    opacity: 0.9;
+    filter: grayscale(50%);
 }
 
 .action-btn.end-turn {
@@ -493,6 +498,48 @@ button {
 .action-btn.end-turn:hover:not(:disabled) {
     background-color: #f57c00;
 }
+
+
+
+.ability-btn {
+    text-align: left;
+    justify-content: flex-start;
+}
+
+.ability-btn-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ability-icon {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+}
+
+.ability-text {
+    flex-grow: 1;
+}
+
+.actions-remaining {
+    font-weight: bold;
+    padding: 8px;
+    margin: 4px;
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+    text-align: center;
+}
+
+.entity-actions {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-bottom: 8px;
+    text-align: center;
+    color: #ffffff;
+    margin: 4px 0;
+}
+
 
 #combatLog {
     background-color: #222;

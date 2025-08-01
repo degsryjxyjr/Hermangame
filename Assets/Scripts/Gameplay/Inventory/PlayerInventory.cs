@@ -131,6 +131,33 @@ public class PlayerInventory
         return null;
     }
 
+
+    /// <summary>
+    /// Finds the InventorySlot for an item that is currently equipped, based on its itemId.
+    /// </summary>
+    /// <param name="itemId">The ID of the item to find.</param>
+    /// <returns>The InventorySlot if the item is equipped, null otherwise.</returns>
+    public InventorySlot GetEquippedSlot(string itemId)
+    {
+        if (string.IsNullOrEmpty(itemId))
+        {
+            Debug.LogWarning("PlayerInventory.GetEquippedSlot: itemId is null or empty.");
+            return null;
+        }
+
+        // Iterate through the equipped dictionary to find by itemId
+        foreach (var kvp in this.EquippedItems)
+        {
+            // Check if the slot is occupied and the item ID matches
+            if (kvp.Value != null && kvp.Value.itemId == itemId)
+            {
+                return kvp.Value; // Return the equipped instance
+            }
+        }
+        return null; // Not found in equipped slots
+    }
+
+
     /// <summary>
     /// Attempts to equip or unequip an item by its ID.
     /// Handles moving the item between the bag and equipped slots.
@@ -141,7 +168,7 @@ public class PlayerInventory
     public bool EquipItem(string itemId, out InventorySlot unequippedItemSlot)
     {
         // Initialize the out parameter
-        unequippedItemSlot = null; 
+        unequippedItemSlot = null;
 
         if (string.IsNullOrEmpty(itemId))
         {
@@ -153,25 +180,26 @@ public class PlayerInventory
         InventorySlot itemSlotToToggle = null;
         ItemDefinition.EquipmentSlot targetSlotType = ItemDefinition.EquipmentSlot.None;
 
-        // a. Search in the Bag
-        itemSlotToToggle = this.BagItems.FirstOrDefault(slot => slot != null && slot.itemId == itemId);
+
+
+        // --- MODIFIED ORDER using PlayerInventory helpers ---
+        // a. First, try to find the item in the Equipped Items using the new helper.
+        //    This is the key fix to prioritize equipped items.
+        itemSlotToToggle = this.GetEquippedSlot(itemId); 
         if (itemSlotToToggle != null)
         {
-            Debug.Log($"Found item '{itemId}' in BagItems.");
             targetSlotType = itemSlotToToggle.ItemDef?.equipSlot ?? ItemDefinition.EquipmentSlot.None;
+            Debug.Log($"Found item '{itemId}' in EquippedItems under slot '{targetSlotType}'. Prioritizing this instance.");
         }
-        else
+
+        // b. If NOT found in equipped slots, try to find it in the Bag using the existing helper.
+        if (itemSlotToToggle == null)
         {
-            // b. If not in bag, search in Equipped Items
-            foreach (var kvp in this.EquippedItems)
+            itemSlotToToggle = this.GetBagSlot(itemId);
+            if (itemSlotToToggle != null)
             {
-                if (kvp.Value != null && kvp.Value.itemId == itemId)
-                {
-                    itemSlotToToggle = kvp.Value;
-                    targetSlotType = kvp.Key;
-                    Debug.Log($"Found item '{itemId}' in EquippedItems under slot '{targetSlotType}'.");
-                    break;
-                }
+                Debug.Log($"Found item '{itemId}' in BagItems.");
+                targetSlotType = itemSlotToToggle.ItemDef?.equipSlot ?? ItemDefinition.EquipmentSlot.None;
             }
         }
 
@@ -202,7 +230,7 @@ public class PlayerInventory
             if (this.EquippedItems.TryGetValue(targetSlotType, out InventorySlot previouslyEquippedSlot) && previouslyEquippedSlot != null)
             {
                 Debug.Log($"Slot '{targetSlotType}' is occupied by '{previouslyEquippedSlot.ItemDef?.displayName ?? "Unknown Item"}'. Moving it to bag.");
-                
+
                 // i. Mark the old item as unequipped
                 previouslyEquippedSlot.isEquipped = false;
                 // ii. Clear the equipped slot

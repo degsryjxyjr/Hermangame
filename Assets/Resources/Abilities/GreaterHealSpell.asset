@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: GreaterHealSpell
   m_EditorClassIdentifier: 
   abilityName: Greater Healing Spell
-  icon: {fileID: 0}
+  icon: {fileID: 21300000, guid: 1707e91b5ff6c914ea436dff979e985d, type: 3}
   actionCost: 2
   cooldown: 5
   supportedTargetTypes: 0000000001000000

@@ -122,7 +122,8 @@ public class CombatService : MonoBehaviour
                     name = player.LobbyData?.Name ?? "Unknown Player",
                     currentHealth = player.CurrentHealth,
                     maxHealth = player.MaxHealth,
-                    actions = player.ActionsRemaining,
+                    totalActions = player.TotalActions,
+                    actionsRemaining = player.ActionsRemaining,
                     attack = player.Attack,
                     defense = player.Defense,
                     magic = player.Magic,
@@ -236,6 +237,8 @@ public class CombatService : MonoBehaviour
             entityType = "player";
             entityName = GetEntityNameSafe(turnEntity);
             SendTurnStartData(entityId, entityType, entityName);
+            // also sending stats update so actions are correctly shown on client UI
+            SendCombatEntityUpdate();
         }
         else if (turnEntity is EnemyEntity enemy)
         {
@@ -464,7 +467,8 @@ public class CombatService : MonoBehaviour
                         name = player.LobbyData?.Name ?? "Unknown Player",
                         currentHealth = player.CurrentHealth,
                         maxHealth = player.MaxHealth,
-                        actions = player.ActionsRemaining,
+                        totalActions = player.TotalActions,
+                        actionsRemaining = player.ActionsRemaining,
                         attack = player.Attack,
                         defense = player.Defense,
                         magic = player.Magic,

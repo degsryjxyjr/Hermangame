@@ -13,13 +13,16 @@ MonoBehaviour:
   m_Name: IceSpikeAbility
   m_EditorClassIdentifier: 
   abilityName: Ice Spike
-  icon: {fileID: 21300000, guid: 1e22dbe7984a6c2488128a730e332e0b, type: 3}
+  icon: {fileID: 21300000, guid: fea83ec7869bb244f93943c8428e07d2, type: 3}
   actionCost: 1
   cooldown: 2
   supportedTargetTypes: 02000000
   range: 5
   radius: 5
   baseEffectValue: 80
+  damageType: 0
+  attackScaling: 0
+  healingScaling: 0
   effectLogicSource: {fileID: 5272473619623566952, guid: 3c1c5488a63fe77488388b267d346718, type: 3}
   effectPrefab: {fileID: 7235997375035445226, guid: cfd0a8e7ca1bca647820c2d22d83924c, type: 3}
   animationTrigger: 

@@ -140,6 +140,8 @@ public class Party : IParty
         {
             if (member != null && GameServer.Instance != null) // Check for nulls
             {
+                //Also sending a statsUpdate as "party_update" not implemented on client side
+                member.SendStatsUpdateToClient();
                 GameServer.Instance.SendToPlayer(member.NetworkId, partyUpdateData);
             }
         }

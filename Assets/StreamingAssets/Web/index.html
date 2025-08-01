@@ -152,6 +152,8 @@
             attack: 0,
             defense: 0,
             magic: 0,
+            totalActions: 0,
+            actionsRemaining: 0,
             abilities: [{}]
         };
 
@@ -519,6 +521,8 @@
                     if (msg.hasOwnProperty('attack')) playerStats.attack = msg.attack;
                     if (msg.hasOwnProperty('defense')) playerStats.defense = msg.defense;
                     if (msg.hasOwnProperty('magic')) playerStats.magic = msg.magic;
+                    if (msg.hasOwnProperty('totalActions')) playerStats.totalActions = msg.totalActions;
+                    if (msg.hasOwnProperty('actionsRemaining')) playerStats.actionsRemaining = msg.actionsRemaining;
 
                     // --- Handle Abilities Update ---
                     // Only update abilities if they are explicitly sent in the message
@@ -816,6 +820,12 @@
                 statsEl.className = 'entity-stats';
                 statsEl.textContent = `Lv. ${playerData.level || 1}`; // Example stat
 
+                // Actions Remaining
+                const actionsEl = document.createElement('div');
+                actionsEl.className = 'entity-actions';
+                actionsEl.textContent = `Actions: ${playerData.actionsRemaining || 0}/${playerData.totalActions || 0}`;
+                playerEl.appendChild(actionsEl);
+
                 // HP Bar Container
                 const hpBarEl = document.createElement('div');
                 hpBarEl.className = 'hp-bar-container';
@@ -977,52 +987,59 @@
                         return; // Skip this iteration
                     }
 
-                    const useAbilityBtn = document.createElement('button');
-                    useAbilityBtn.className = 'action-btn'; // You could add a specific class like 'ability-btn' if needed
-                    // Display name and cost
+                    const abilityBtn = document.createElement('button');
+                    abilityBtn.className = 'action-btn ability-btn';
+                    abilityBtn.dataset.abilityId = ability.id;
+                    
+                    // Create container for icon and text
+                    const btnContent = document.createElement('div');
+                    btnContent.className = 'ability-btn-content';
+                    
+                    // Add icon if available
+                    if (ability.iconPath) {
+                        const iconEl = document.createElement('img');
+                        iconEl.className = 'ability-icon';
+                        iconEl.src = ability.iconPath;
+                        iconEl.alt = ability.name;
+                        iconEl.onerror = function() {
+                            // Fallback if icon fails to load
+                            this.src = 'images/icons/default-ability.png';
+                        };
+                        btnContent.appendChild(iconEl);
+                    }
+                    
+                    // Add ability name and cost
+                    const textEl = document.createElement('span');
+                    textEl.className = 'ability-text';
                     let buttonText = ability.name;
                     if (ability.actionCost !== undefined && ability.actionCost > 0) {
                         buttonText += ` (${ability.actionCost} AP)`;
                     }
-                    useAbilityBtn.textContent = buttonText;
+                    textEl.textContent = buttonText;
+                    btnContent.appendChild(textEl);
                     
-                    // Tooltip with target types (optional)
+                    abilityBtn.appendChild(btnContent);
+                    
+                    // Tooltip with target types
                     if (Array.isArray(ability.targetTypes) && ability.targetTypes.length > 0) {
-                        useAbilityBtn.title = `Targets: ${ability.targetTypes.join(', ')}`;
+                        abilityBtn.title = `Targets: ${ability.targetTypes.join(', ')}`;
                     } else {
-                        useAbilityBtn.title = `Targets: Unknown`;
+                        abilityBtn.title = `Targets: Unknown`;
                     }
-
-                    // Store the ability ID on the button for easy access
-                    useAbilityBtn.dataset.abilityId = ability.id; 
                     
-                    // On click, initiate the use_ability action
-                    useAbilityBtn.onclick = () => initiateAction('use_ability', { abilityId: ability.id });
+                    // Just graying out button if not enough actions remaining. As server will still handle validation!
+                    const actionCost = ability.actionCost || 1;
+                    if (playerStats.actionsRemaining < actionCost) {
+                        abilityBtn.classList.add('unaffordable');
+                    } else {
+                        abilityBtn.classList.remove('unaffordable');
+                    }
                     
-                    actionContainer.appendChild(useAbilityBtn);
+                    abilityBtn.onclick = () => initiateAction('use_ability', { abilityId: ability.id });
+                    
+                    actionContainer.appendChild(abilityBtn);
                 });
             }
-
-
-            // --- 3. Use Item ---
-            // (Logic for items remains similar, but you might also want to fetch/update items via stats_update or a separate message)
-            // For now, assuming you have an items array in playerStats or elsewhere
-            /*
-            if (Array.isArray(playerStats.items) && playerStats.items.length > 0) {
-                const useItemBtn = document.createElement('button');
-                useItemBtn.className = 'action-btn';
-                useItemBtn.textContent = 'Use Item'; // Or first item name
-                useItemBtn.title = 'Select an item from your inventory.'; // Or first item description
-                useItemBtn.onclick = () => {
-                    // Logic to select item or use first/default item
-                    if (playerStats.items.length > 0) {
-                        const firstItem = playerStats.items[0];
-                        initiateAction('use_item', { itemId: firstItem.id });
-                    }
-                };
-                actionContainer.appendChild(useItemBtn);
-            }
-            */
 
             // --- 4. End Turn Button (Optional but Standard) ---
             const endTurnBtn = document.createElement('button');
