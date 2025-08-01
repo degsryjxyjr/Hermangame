@@ -323,6 +323,7 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
     /// <summary>
     /// Adds an ability to the player's permanently unlocked list.
     /// This ability persists regardless of equipment changes.
+    /// If the ability is already granted transiently, it is removed from the transient list.
     /// </summary>
     /// <param name="ability">The AbilityDefinition to grant permanently.</param>
     /// <param name="sendUpdate">If true, sends a stats update to the client. Default is true.</param>
@@ -338,6 +339,24 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
         {
             PermanentAbilities.Add(ability);
             Debug.Log($"PlayerConnection ({LobbyData?.Name}): Permanently granted ability '{ability.abilityName}'.");
+
+            // --- NEW: Handle Edge Case ---
+            // If this ability was also granted transiently, remove the transient version
+            // as the permanent one now covers it.
+            if (TransientAbilities.Contains(ability))
+            {
+                // Note: We don't call RemoveTransientAbility here because that method
+                // has logic to check if OTHER items grant it, which isn't relevant.
+                // We are forcibly removing it because it's now permanent.
+                if (TransientAbilities.Remove(ability))
+                {
+                    Debug.Log($"PlayerConnection ({LobbyData?.Name}): Removed transient version of '{ability.abilityName}' as it is now permanently granted.");
+                    // Removing it from Transient list might warrant a UI update
+                    // if transient abilities are displayed differently or affect action costs differently (unlikely, but possible).
+                    // For consistency, we should trigger an update if requested.
+                }
+            }
+            // --- END NEW ---
         }
         else
         {
@@ -345,9 +364,10 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
         }
 
         // Optionally send an update to the client so the new ability appears in the UI
+        // This also ensures the client's view of abilities is consistent.
         if (sendUpdate)
         {
-            SendStatsUpdateToClient(); // This will now include the updated PermanentAbilities list
+            SendStatsUpdateToClient(); // This will now include the updated Permanent/Transient lists
         }
     }
 
@@ -597,7 +617,7 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
     }
 
 
-     // --- Communication with Client ---
+    // --- Communication with Client ---
     /// <summary>
     /// Sends the player's current stats (health, attack, etc.) and abilities to the client.
     /// Updated to send Permanent and Transient abilities separately.

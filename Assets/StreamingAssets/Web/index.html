@@ -32,6 +32,39 @@
         <button onclick="disconnect()">Leave Lobby</button>
     </div>
     <div id="gameView">
+        <div id="mapView">
+            <h2>Map View</h2>
+            <div id="mapContent">
+                <!-- Map content (could be an image, canvas, or other elements) -->
+                <p>Exploring the world...</p>
+            </div>
+        
+            <!-- --- Party Display Section --- -->
+            <div id="partyDisplay">
+                <h3>Your Party</h3>
+                <div id="partyMembersList">
+                    <!-- Party members will be populated here dynamically -->
+                    <!-- Example static structure (will be replaced by JS): -->
+                    <!--
+                    <div class="party-member" data-player-id="player123">
+                        <img src="images/players/default-player.png" alt="Player Icon" class="party-member-icon">
+                        <span class="party-member-name">Player One</span>
+                        <span class="party-member-hp">HP: 50/100</span>
+                    </div>
+                    -->
+                </div>
+            </div>
+            <!-- --- END  --- -->
+
+            <!-- ---  Trade Request Notification (Hidden by default) --- -->
+            <div id="tradeRequestNotification" class="notification" style="display:none;">
+                <p><span id="tradeRequesterName">Someone</span> wants to trade with you!</p>
+                <button id="acceptTradeRequest">Accept</button>
+                <button id="declineTradeRequest">Decline</button>
+            </div>
+            <!-- --- END  --- -->
+        </div>
+
         <!-- Inventory Button (floating action button for mobile) -->
         <button id="inventoryButton" class="fab">
             <img src="images/icons/backpack.jpg" alt="Inventory">
@@ -48,7 +81,69 @@
             <p><strong>DEF:</strong> <span id="statsDefense">0</span></p>
             <p><strong>MAG:</strong> <span id="statsMagic">0</span></p>
         </div>
-        
+
+        <!-- --- Trade View (Initially Hidden) --- -->
+        <div id="tradeView" class="panel" style="display:none;">
+            <h2>Trading</h2>
+            <div id="tradePartnerInfo">
+                <h3>Trading with: <span id="tradePartnerName">Partner</span></h3>
+                <!-- Optionally show partner's class icon here too -->
+            </div>
+
+            <div class="trade-sections-container"> <!-- Container for side-by-side layout -->
+
+                <div class="trade-section">
+                    <h4>Your Inventory</h4>
+                    <!-- --- MODIFIED: Replaced static text with dynamic grid --- -->
+                    <div id="tradeYourInventory" class="trade-inventory-grid">
+                        <!-- Your items for trading will be populated here dynamically -->
+                        <!-- Example placeholder (will be cleared and filled by JS):
+                        <div class="trade-inventory-item" data-item-id="item_wood">
+                            <img src="images/items/wood.png" alt="Wood" class="trade-item-icon">
+                            <span class="trade-item-name">Wood</span>
+                            <span class="trade-item-quantity">x10</span>
+                        </div>
+                        -->
+                    </div>
+                    <!-- --- END MODIFIED --- -->
+                    <div class="trade-offered-items">
+                        <h5>Your Offer:</h5>
+                        <div id="tradeYourOffer" class="trade-offer-grid">
+                            <!-- Items you've added to the trade will appear here -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="trade-section">
+                    <h4>Partner's Inventory</h4>
+                    <div id="tradePartnerInventory" class="trade-inventory-grid">
+                        <!-- Partner's items for trading will be populated here (if server sends them) -->
+                        <!-- Or just a placeholder "Items not visible" message -->
+                        <p>Partner's items are not visible.</p>
+                    </div>
+                    <div class="trade-offered-items">
+                        <h5>Partner's Offer:</h5>
+                        <div id="tradePartnerOffer" class="trade-offer-grid">
+                            <!-- Partner's added items will appear here -->
+                        </div>
+                    </div>
+                </div>
+
+            </div> <!-- End trade-sections-container -->
+
+            <div class="trade-actions">
+                <button id="tradeConfirm">Confirm Trade</button>
+                <button id="tradeCancel">Cancel Trade</button>
+            </div>
+
+            <div id="tradeMessages">
+                <!-- Area for trade-specific messages/logs -->
+            </div>
+        </div>
+        <!-- --- END --- -->
+
+
+
         <!-- Combat View Panel -->
         <div id="combatPanel">
             <div id="combatHeader">
@@ -127,11 +222,21 @@
         let roomCode = '';
         let playerName = "Player Name";
 
+        let currentPartyData = null;
 
         let isInCombat = false;
         let currentCombatState = null; // To store data sent by the server
         let selectedAction = null;
         let selectedTarget = null;
+
+
+        // --- Trading Specific Variables ---
+        let currentTradeSessionId = null;
+        let isTradeActive = false; // Flag to track if we are in a trade view/session
+        let tradeOffers = { // Local representation of what we've offered
+            items: {} // itemId: quantity
+        };
+        // --- END ---
 
         /* ---- INVENTORY UI ---- */
         const inventoryButton = document.getElementById('inventoryButton');
@@ -152,6 +257,8 @@
             attack: 0,
             defense: 0,
             magic: 0,
+            totalActions: 0,
+            actionsRemaining: 0,
             abilities: [{}]
         };
 
@@ -254,6 +361,10 @@
                 });
             }
 
+            // --- IMPORTANT: Update the global inventoryData variable ---
+            inventoryData = bagItems; // This is crucial for updateTradeInventoryDisplay
+            // --- END IMPORTANT ---
+
             // --- Handle Equipped Items (NEW LOGIC) ---
             const equippedData = inventoryUpdateData.equipped || {}; // Ensure it's an object
             const equippedContainer = document.getElementById('equippedItems');
@@ -312,9 +423,12 @@
         }
         // --- Helper function to create an inventory item element ---
         // This avoids duplicating the creation logic for bag and equipped items
-        function createInventoryItemElement(item) {
+        function createInventoryItemElement(item, isForTrade = false) {
+            // --- MODIFIED: Allow different base class for trade items ---
+            const baseClassName = isForTrade ? 'trade-inventory-item' : 'inventory-item';
+            // --- END MODIFIED ---
             const itemEl = document.createElement('div');
-            itemEl.className = 'inventory-item'; // Or 'equipped-item' if you want different base styles
+            itemEl.className = baseClassName;
 
             // --- Create the image element ---
             const imgEl = document.createElement('img');
@@ -343,11 +457,14 @@
             nameEl.textContent = item.name || 'Unknown Item';
 
             // --- Create quantity element (if applicable and > 1) ---
+            // ---  Always show quantity in trade view, even if 1 ---
             let quantityEl = null;
-            if (item.quantity && item.quantity > 1) {
+            const quantityToShow = isForTrade ? item.quantity : (item.quantity && item.quantity > 1 ? item.quantity : null);
+            if (quantityToShow !== null && quantityToShow !== undefined) {
                 quantityEl = document.createElement('span');
-                quantityEl.className = 'item-quantity';
-                quantityEl.textContent = item.quantity;
+                // --- MODIFIED: Reuse CSS class for trade view if needed ---
+                quantityEl.className = 'item-quantity'; // Or 'trade-item-quantity' if distinct styles are needed
+                quantityEl.textContent = `x${quantityToShow}`;
             }
 
             // --- Assemble the item element ---
@@ -357,9 +474,281 @@
                 itemEl.appendChild(quantityEl);
             }
 
+            // --- : Add trade-specific data attributes and click listener if needed ---
+            if (isForTrade) {
+                itemEl.dataset.itemId = item.id; // Store item ID
+                itemEl.dataset.itemQuantity = item.quantity; // Store quantity for reference
+                // The click listener will be added by the caller (updateTradeInventoryDisplay)
+                // to have access to trade-specific variables like currentTradeSessionId.
+                // Alternatively, you could pass a callback function here.
+            }
+            // --- END  ---
+
             return itemEl;
         }
         /* ---- INVENTORY UI END---- */
+
+        // --- NEW: Function to update the trade inventory display ---
+        // This uses the global inventoryData variable, assumed to be kept up-to-date by handleInventoryData
+        // --- MODIFIED: Simplified updateTradeInventoryDisplay using createInventoryItemElement ---
+        function updateTradeInventoryDisplay() {
+            const tradeInventoryGrid = document.getElementById('tradeYourInventory');
+            console.log("updateTradeInventoryDisplay called");
+            console.log("Current inventoryData:", inventoryData);
+
+            if (!tradeInventoryGrid) {
+                console.warn("Trade inventory grid element not found.");
+                return;
+            }
+
+            // Clear existing items
+            tradeInventoryGrid.innerHTML = '';
+
+            if (!inventoryData) {
+                console.warn("inventoryData is null or undefined.");
+                tradeInventoryGrid.innerHTML = '<div class="trade-inventory-empty">Inventory data not loaded.</div>';
+                return;
+            }
+
+            if (!Array.isArray(inventoryData)) {
+                console.error("inventoryData is not an array:", typeof inventoryData, inventoryData);
+                tradeInventoryGrid.innerHTML = '<div class="trade-inventory-empty">Error loading inventory.</div>';
+                return;
+            }
+
+            if (inventoryData.length === 0) {
+                console.log("inventoryData array is empty.");
+                tradeInventoryGrid.innerHTML = '<div class="trade-inventory-empty">Your inventory is empty.</div>';
+                return;
+            }
+
+            // Filter out items with quantity <= 0
+            const validItems = inventoryData.filter(item => {
+                const isValid = item.quantity > 0;
+                if (!isValid) {
+                    console.log(`Skipping item ${item.id} because quantity is ${item.quantity}`);
+                }
+                return isValid;
+            });
+
+            console.log("Valid items found for trade:", validItems.length);
+
+            if (validItems.length === 0) {
+                tradeInventoryGrid.innerHTML = '<div class="trade-inventory-empty">No items available to trade.</div>';
+                return;
+            }
+
+            // Iterate through valid items and create display elements using the helper
+            validItems.forEach(item => {
+                // --- NEW: Use the reusable helper function ---
+                const itemDiv = createInventoryItemElement(item, true); // true indicates it's for trade
+                // --- END NEW ---
+
+                // --- NEW: Add Trade-Specific Click Listener ---
+                // Add the click listener here, as the helper now prepares the element for it.
+                itemDiv.addEventListener('click', function() {
+                    if (!isTradeActive || !currentTradeSessionId) {
+                        logTradeMessage("Not in an active trade session.", 'warn');
+                        return;
+                    }
+
+                    const itemId = this.dataset.itemId;
+                    const itemName = item.name || 'Unknown Item';
+                    const maxQuantity = parseInt(this.dataset.itemQuantity, 10) || 0;
+
+                    if (!itemId || maxQuantity <= 0) {
+                        logTradeMessage("Invalid item selected.", 'error');
+                        return;
+                    }
+
+                    let quantityStr = prompt(`How many ${itemName} do you want to add? (Max: ${maxQuantity})`, "1");
+                    let quantityToAdd = parseInt(quantityStr, 10);
+
+                    if (isNaN(quantityToAdd) || quantityToAdd <= 0) {
+                        logTradeMessage("Invalid quantity entered.", 'warn');
+                        return;
+                    }
+
+                    if (quantityToAdd > maxQuantity) {
+                        quantityToAdd = maxQuantity;
+                        logTradeMessage(`Quantity capped to available amount: ${quantityToAdd}`, 'info');
+                    }
+
+                    sendMessage({
+                        type: "trade",
+                        trade_action: "add_item",
+                        session_id: currentTradeSessionId,
+                        item_id: itemId, // Use 'id'
+                        quantity: quantityToAdd
+                    });
+                    logTradeMessage(`Attempting to add ${quantityToAdd}x ${itemName} to trade.`, 'info');
+                });
+                // --- END NEW ---
+
+                // Append the configured item div to the trade inventory grid
+                tradeInventoryGrid.appendChild(itemDiv);
+            });
+            console.log("Finished populating trade inventory grid.");
+        }
+
+
+
+        // ---  Update Map View Function ---
+        // This needs to be called when entering the map view or when party data updates.
+        function updateMapView(partyData) {
+            const partyListElement = document.getElementById('partyMembersList');
+            if (!partyListElement) {
+                console.warn("Party list element not found in DOM.");
+                return;
+            }
+
+            // Clear existing list
+            partyListElement.innerHTML = '';
+
+            if (!partyData || !partyData.party.members || partyData.party.members.length === 0) {
+                partyListElement.innerHTML = '<p>Your party is empty.</p>';
+                return;
+            }
+
+            // Iterate through party members and create display elements
+            partyData.party.members.forEach(member => {
+                // Create the main container div for the member
+                const memberDiv = document.createElement('div');
+                memberDiv.className = 'party-member';
+                memberDiv.dataset.playerId = member.id; // Store player ID for click events
+
+                // Create and set the icon
+                const iconImg = document.createElement('img');
+                iconImg.src = member.iconPath || 'images/players/default-player.png'; // Use path from data or default
+                iconImg.alt = `${member.name || 'Player'} Icon`;
+                iconImg.className = 'party-member-icon';
+
+                // Create and set the name
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'party-member-name';
+                nameSpan.textContent = member.name || 'Unknown Player';
+
+                // Create and set the HP
+                const hpSpan = document.createElement('span');
+                hpSpan.className = 'party-member-hp';
+                // Format HP display, handling potential undefined values
+                const currentHp = member.currentHealth !== undefined ? member.currentHealth : '?';
+                const maxHp = member.maxHealth !== undefined ? member.maxHealth : '?';
+                hpSpan.textContent = `HP: ${currentHp}/${maxHp}`;
+
+                // Append elements to the member div
+                memberDiv.appendChild(iconImg);
+                memberDiv.appendChild(nameSpan);
+                memberDiv.appendChild(hpSpan);
+
+                // --- NEW: Add Click Listener for Trading ---
+                memberDiv.addEventListener('click', function() {
+                    const targetPlayerId = this.dataset.playerId;
+                    const targetPlayerName = member.name || 'Unknown Player';
+                    if (targetPlayerId && targetPlayerId !== currentPlayerId) {
+                        // Prevent trading with yourself
+                        console.log(`Requesting trade with player ID: ${targetPlayerId}`);
+                        // Send trade request message to server
+                        sendMessage({
+                            type: "trade",
+                            trade_action: "request",
+                            target_player_id: targetPlayerId
+                        });
+                        logDebug(`Trade request sent to ${targetPlayerName} (${targetPlayerId})`, 'info');
+                    } else if (targetPlayerId === currentPlayerId) {
+                        logDebug("You cannot trade with yourself.", 'warn');
+                    }
+                });
+                // --- END NEW ---
+
+                // Append the member div to the list
+                partyListElement.appendChild(memberDiv);
+            });
+        }
+        // --- END  ---
+
+
+        // --- : Show/Hide Trade Request Notification ---
+        function showTradeRequest(requesterId, requesterName, sessionId) { // Add sessionId parameter
+            const notification = document.getElementById('tradeRequestNotification');
+            const requesterNameSpan = document.getElementById('tradeRequesterName');
+            if (notification && requesterNameSpan) {
+                requesterNameSpan.textContent = requesterName;
+                notification.dataset.requesterId = requesterId;
+                // --- : Store the session ID on the notification element ---
+                if (sessionId) {
+                    notification.dataset.sessionId = sessionId; // Store Session ID
+                } else {
+                    console.error("showTradeRequest called without sessionId!");
+                    delete notification.dataset.sessionId; // Ensure it's not set if missing
+                }
+                // --- END  ---
+                notification.style.display = 'block';
+                logDebug(`Trade request received from ${requesterName}`, 'info');
+            }
+        }
+
+        function hideTradeRequest() {
+            const notification = document.getElementById('tradeRequestNotification');
+            if (notification) {
+                notification.style.display = 'none';
+                delete notification.dataset.requesterId; // Clear stored requester ID
+                delete notification.dataset.sessionId; // Clear stored Trading Session ID
+            }
+        }
+        // --- END ---
+
+        // --- Toggle Trade View ---
+        function toggleTradeView(show = null) {
+            const tradeView = document.getElementById('tradeView');
+            const mapView = document.getElementById('mapView'); // Assuming mapView is the main map container
+            if (!tradeView || !mapView) {
+                console.error("Trade view or Map view element not found.");
+                return;
+            }
+
+            const isVisible = tradeView.style.display !== 'none';
+
+            // Determine the desired state
+            const shouldShow = show === null ? !isVisible : show; // If show is null, toggle. Otherwise, set to 'show'.
+
+            if (shouldShow) {
+                tradeView.style.display = 'block';
+                mapView.style.display = 'none'; // Hide map view when trade is active
+                isTradeActive = true;
+                logDebug("Trade view opened.", 'info');
+                
+                // Populate the trade inventory when the view opens ---
+                // This ensures it reflects the latest inventory state
+                updateTradeInventoryDisplay();
+
+                // Optionally request initial trade data or inventory snapshot here
+                // sendMessage({ type: "trade", trade_action: "get_inventory" }); // If needed
+            } else {
+                tradeView.style.display = 'none';
+                mapView.style.display = 'block'; // Show map view when trade is closed
+                isTradeActive = false;
+                logDebug("Trade view closed.", 'info');
+                // Clear trade state/UI if needed?
+                clearTradeView();
+            }
+        }
+
+        function clearTradeView() {
+            // Reset local trade state
+            currentTradeSessionId = null;
+            tradeOffers = { items: {} };
+
+            // Clear UI elements
+            document.getElementById('tradePartnerName').textContent = 'Partner';
+            document.getElementById('tradeYourInventory').innerHTML = '';
+            document.getElementById('tradePartnerInventory').innerHTML = '<p>Partner\'s items are not visible.</p>';
+            document.getElementById('tradeYourOffer').innerHTML = '';
+            document.getElementById('tradePartnerOffer').innerHTML = '';
+            document.getElementById('tradeMessages').innerHTML = '';
+            logDebug("Trade view cleared.", 'info');
+        }
+        // --- END NEW ---
 
         function logDebug(message, category = "system") { // Add category parameter
             const debugElement = document.getElementById('debugLog');
@@ -471,11 +860,28 @@
                 case "game_state_change":
                     switch (msg.state) {
                         case "Map":
-                            exitCombatMode();
+                            
                             document.getElementById('lobbyView').style.display = 'none';
                             document.getElementById('gameView').style.display = 'block';
+                            
                             // Ensure inventory is hidden when game starts
                             document.getElementById('inventoryPanel').style.display = 'none';
+
+                            // ensure tradeView is hidden when game starts
+                            document.getElementById('tradeView').style.display = 'none';
+
+                            // --- Update Map View Party Display ---
+                            // When entering the map view, use the stored party data to populate the display
+                            if (currentPartyData) {
+                                updateMapView(currentPartyData);
+                            } else {
+                                console.warn("Entering Map view, but no party data is currently stored.");
+                                // Optionally, request party data if it's unexpectedly missing?
+                                // sendMessage({ type: "party", action: "get" }); // Example request
+                                // Or, clear the display
+                                updateMapView(null); // This will show "Your party is empty."
+                            }
+
                             // <-- Show stats display when game starts -->
                             const statsDisplayElement = document.getElementById('playerStatsDisplay');
                             if (statsDisplayElement) {
@@ -484,7 +890,6 @@
                             }
                             break;
                         case "Lobby":
-                            exitCombatMode();
                             document.getElementById('gameView').style.display = 'none';
                             document.getElementById('lobbyView').style.display = 'block';
                             // <-- Hide stats display when back to lobby -->
@@ -519,6 +924,8 @@
                     if (msg.hasOwnProperty('attack')) playerStats.attack = msg.attack;
                     if (msg.hasOwnProperty('defense')) playerStats.defense = msg.defense;
                     if (msg.hasOwnProperty('magic')) playerStats.magic = msg.magic;
+                    if (msg.hasOwnProperty('totalActions')) playerStats.totalActions = msg.totalActions;
+                    if (msg.hasOwnProperty('actionsRemaining')) playerStats.actionsRemaining = msg.actionsRemaining;
 
                     // --- Handle Abilities Update ---
                     // Only update abilities if they are explicitly sent in the message
@@ -568,7 +975,7 @@
                     break;
 
                 case 'encounter_end': // Message sent by CombatService/EncounterManager
-                    isInCombat = false;
+                    exitCombatMode();
                     // msg might contain result (victory/defeat)
                     logCombatMessage(`Encounter ended. Result: ${msg.result}`, "system");
                     // Maybe show a victory/defeat message or automatically transition?
@@ -666,10 +1073,555 @@
                     logCombatMessage(msg.message, msg.category || "system"); // category could be 'player', 'enemy', 'damage', 'heal'
                     break;
 
+                case 'party_update':
+                    // Store the full party data message for later use (e.g., on map view entry)
+                    currentPartyData = msg;
+                    console.log("Party data updated:", currentPartyData);
+
+                    // --- Check if we are currently on the map view and update it ---
+                    // This ensures the map view party display is updated whenever new party data arrives,
+                    // regardless of how it got there (initial load, player joined/lef, stats changed, etc.)
+                    const mapViewElement = document.getElementById('mapView');
+                    if (mapViewElement && mapViewElement.style.display !== 'none') {
+                        updateMapView(currentPartyData);
+                        console.log("Map view party display updated due to party_update message.");
+                    }
+
+                    // --- Also update any other UI elements that depend on party data ---
+                    // If you have a lobby view party list or similar, update it here.
+                    // Example (if you had a function like this):
+                    // updateLobbyPartyList(msg.members);
+
+                    // --- END NEW ---
+                    break;
+                
+                // ---: Trading Related Messages ---
+                case 'trade_status':
+                    handleTradeStatus(msg);
+                    break;
+                case 'trade_update':
+                    handleTradeUpdate(msg);
+                    break;
+
+                case 'trade_error': // Handle specific trade errors if your server sends them
+                    break;
+
+                case 'error': // Or generic errors related to trade actions
+                    if (msg.message && isTradeActive) {
+                        logTradeMessage(`Error: ${msg.message}`, 'error');
+                    } else if (msg.message) {
+                        logDebug(`Error: ${msg.message}`, 'error'); // Log general errors
+                    }
+                    break;
+                // --- END NEW ---
                 default:
                     logDebug(`Unknown message type: ${msg.type}`);
             }
         }
+
+
+        // --- NEW: Trade Message Handlers ---
+        function handleTradeStatus(msg) {
+            const status = msg.status;
+            const sessionId = msg.session_id;
+            const reason = msg.reason;
+
+            switch(status) {
+                case 'request_sent':
+                    // This is an ack that our request was sent (optional handling)
+                    logTradeMessage("Trade request sent. Waiting for response...", 'info');
+                    break;
+
+                case 'trade_request': // This is the incoming request *to* the current player
+                    const requesterId = msg.requester_player_id;
+                    const requesterName = msg.requester_player_name || 'Unknown Player';
+                    // Get the session ID from the message ---
+                    const tradeSessionId = msg.session_id; // Get the session ID sent by the server
+                    if (requesterId) {
+                        // --- MODIFIED: Pass the session ID to showTradeRequest ---
+                        showTradeRequest(requesterId, requesterName, tradeSessionId); // Pass Session ID
+                    }
+                    break;
+                // --- : Handle confirmation of adding an item to YOUR offer ---
+                case 'item_added':
+                    // Server confirms an item was added to YOUR offer
+                    const addedItemInfo = {
+                        id: msg.item_id,
+                        quantity: msg.new_total_quantity || msg.quantity_added || 1 // Prefer total quantity
+                        // Name/Icon could be included by server if needed immediately, otherwise we can try to find it
+                        // in inventoryData. Let's assume name/icon might be needed, request if not present?
+                        // For now, let's see if we can get name/icon from inventoryData or use defaults.
+                    };
+                    // Update your offer display
+                    updateYourOfferDisplay(addedItemInfo, true); // true = add/update
+                    logTradeMessage(`Added ${msg.quantity_added || 1}x ${msg.item_id} to your offer.`, 'info');
+                    break;
+                // --- END  ---
+                case 'item_removed':
+                    // Server confirms an item was removed from YOUR offer
+                    const removedItemInfo = {
+                        id: msg.item_id,
+                        quantity: msg.new_total_quantity || 0 // Prefer total remaining quantity
+                    };
+                    // Update your offer display
+                    updateYourOfferDisplay(removedItemInfo, false); // false = remove
+                    logTradeMessage(`Removed item (${msg.item_id}) from your offer.`, 'info');
+                    // If new_total_quantity > 0, it was a partial removal.
+                    if (msg.new_total_quantity > 0) {
+                        logTradeMessage(`(Quantity reduced by ${msg.quantity_removed || 1})`, 'info');
+                    }
+                    break;
+
+
+                case 'started':
+                    // Trade session is active, open the trade view
+                    if (sessionId) {
+                        currentTradeSessionId = sessionId;
+                        const partnerName = msg.partner_name || 'Partner';
+                        document.getElementById('tradePartnerName').textContent = partnerName;
+                        toggleTradeView(true); // Show trade view
+                        logTradeMessage(`Trade started with ${partnerName}. Session ID: ${sessionId}`, 'info');
+                    }
+                    break;
+                case 'declined':
+                    logTradeMessage(`Trade request declined.${reason ? ' Reason: ' + reason : ''}`, 'warn');
+                    // Optionally hide request notification if it was shown
+                    hideTradeRequest();
+                    break;
+                case 'cancelled':
+                    logTradeMessage(`Trade cancelled.${reason ? ' Reason: ' + reason : ''}`, 'info');
+                    if (isTradeActive) {
+                        toggleTradeView(false); // Close trade view if it was open
+                    }
+                    hideTradeRequest(); // Also hide notification
+                    break;
+                case 'completed':
+                    logTradeMessage("Trade completed successfully!", 'success');
+                    toggleTradeView(false); // Close trade view
+                    // Optionally trigger an inventory update?
+                    sendMessage({ type: "inventory", action: "get" });
+                    break;
+                case 'failed':
+                    const failReason = reason || 'Unknown error.';
+                    logTradeMessage(`Trade failed. ${failReason}`, 'error');
+                    if (isTradeActive) {
+                        toggleTradeView(false); // Close trade view
+                    }
+                    break;
+                case 'error': // If trade_status is also used for errors
+                    const errorMsg = reason || 'An error occurred.';
+                    logTradeMessage(`Trade error. ${errorMsg}`, 'error');
+                    if (isTradeActive) {
+                        toggleTradeView(false); // Close trade view on error?
+                    }
+                    break;
+                default:
+                    console.warn(`Unknown trade status: ${status}`, msg);
+                    logTradeMessage(`Unknown trade status received: ${status}`, 'warn');
+            }
+        }
+
+        function handleTradeUpdate(msg) {
+            const updateType = msg.update_type;
+            switch(updateType) {
+                // --- Handle partner adding an item to THEIR offer ---
+                case 'partner_item_added':
+                    // Server tells us the partner added an item to their offer
+                    // Try to get name/icon from message, fallback to defaults
+                    const partnerAddedItemInfo = {
+                        id: msg.item_id,
+                        name: msg.item_name || 'Unknown Item', // Server might send this
+                        quantity: msg.quantity || 1,
+                        iconPath: msg.icon || 'images/items/default-item.png' // Server might send this
+                    };
+                    // Add/update the item in the partner's offer display
+                    updatePartnerOfferDisplay(partnerAddedItemInfo, true); // true = add/update
+                    const partnerName = msg.partner_name || 'Partner'; // Server might send this
+                    logTradeMessage(`${partnerName} added ${partnerAddedItemInfo.quantity}x ${partnerAddedItemInfo.name} to their offer.`, 'info');
+                    break;
+                // --- END NEW ---
+                
+
+
+                // --- NEW: Handle partner removing an item from THEIR offer ---
+                // --- MODIFIED: Handle partner removing an item from THEIR offer ---
+                case 'partner_item_removed':
+                    // Server tells us the partner removed an item from their offer
+                    const partnerRemovedItemInfo = {
+                        id: msg.item_id,
+                        // For updatePartnerOfferDisplay(isAdding=false), we need to pass the quantity that was REMOVED
+                        quantity: msg.quantity || 1 // Quantity removed (this is what updatePartnerOfferDisplay expects now)
+                        // Name/icon are less critical for removal, but could be included if sent by server
+                        // name: msg.item_name || 'Unknown Item',
+                        // iconPath: msg.icon_path || 'images/items/default-item.png'
+                    };
+                    // Remove/reduce the item in the partner's offer display
+                    updatePartnerOfferDisplay(partnerRemovedItemInfo, false); // false = remove
+                    const partnerNameRemoved = msg.partner_name || 'Partner';
+                    logTradeMessage(`${partnerNameRemoved} removed ${partnerRemovedItemInfo.quantity}x item (${partnerRemovedItemInfo.id}) from their offer.`, 'info');
+                    break;
+                // --- END  ---
+
+                case 'partner_confirmed':
+                    logTradeMessage(`${msg.partner_name || 'Partner'} has confirmed the trade.`, 'info');
+                    // Visually indicate partner confirmation if desired (e.g., highlight their section)
+                    break;
+                // Add other update types as needed (e.g., partner cancelled, inventory snapshot if sent)
+
+                default:
+                    console.log(`Unhandled trade update type: ${updateType}`, msg);
+                    // Log generic update message?
+                    if (msg.message) {
+                        logTradeMessage(msg.message, 'info');
+                    }
+            }
+        }
+
+        // --- MODIFIED: updateYourOfferDisplay function ---
+        /// <summary>
+        /// Updates the display of items in YOUR offer grid.
+        /// </summary>
+        /// <param name="itemInfo">Object containing item details (id, quantity, name, iconPath).</param>
+        /// <param name="isAdding">True to add/update the item, false to remove it.</param>
+        function updateYourOfferDisplay(itemInfo, isAdding) {
+            const offerGrid = document.getElementById('tradeYourOffer');
+            if (!offerGrid) {
+                console.error("Your offer grid element (#tradeYourOffer) not found.");
+                return;
+            }
+
+            const itemId = itemInfo.id;
+            const itemElementId = `trade-your-offer-item-${itemId}`;
+            let itemElement = document.getElementById(itemElementId);
+
+            if (isAdding) {
+                // --- Find item details in inventoryData for name/icon (if not provided) ---
+                let itemName = itemInfo.name;
+                let itemIconPath = itemInfo.iconPath;
+                if (!itemName || !itemIconPath) {
+                    const inventoryItem = inventoryData?.find(item => item.id === itemId);
+                    if (inventoryItem) {
+                        itemName = itemName || inventoryItem.name || 'Unknown Item';
+                        itemIconPath = itemIconPath || inventoryItem.icon || 'images/icons/default-item.png';
+                    } else {
+                        // Fallback if not found in inventory (shouldn't happen normally for items you add)
+                        itemName = itemName || itemInfo.id || 'Unknown Item';
+                        itemIconPath = itemIconPath || 'images/items/default-item.png';
+                    }
+                }
+                // --- End find item details ---
+
+                // --- NEW: Use createInventoryItemElement helper ---
+                // Create a temporary item object with the data we have for the helper
+                const tempItemForHelper = {
+                    id: itemId,
+                    name: itemName,
+                    icon: itemIconPath, // Use 'icon' as expected by the helper
+                    quantity: itemInfo.quantity
+                };
+                // --- END NEW ---
+
+                if (!itemElement) {
+                    // --- MODIFIED: Use helper to create the base element ---
+                    itemElement = createInventoryItemElement(tempItemForHelper, true); // true for trade view
+                    itemElement.id = itemElementId;
+                    itemElement.className = 'trade-item trade-item-offered trade-item-yours'; // Set specific classes
+                    itemElement.dataset.itemId = itemId; // Ensure dataset is set
+                    // --- END MODIFIED ---
+
+                    // --- MODIFIED: Add Click Listener for Removing Item from YOUR Offer ---
+                    itemElement.addEventListener('click', function() {
+                        if (!isTradeActive || !currentTradeSessionId) {
+                            logTradeMessage("Not in an active trade session.", 'warn');
+                            return;
+                        }
+
+                        const itemIdToRemove = this.dataset.itemId;
+                        const itemNameForLog = itemName; // Capture name from closure or find it again
+                        // Get current displayed quantity
+                        const quantitySpan = this.querySelector('.item-quantity');
+                        const currentOfferedQuantity = quantitySpan ? parseInt(quantitySpan.textContent.replace('x', ''), 10) || 1 : 1;
+
+                        let quantityStr = prompt(`How many ${itemNameForLog} do you want to remove from trade? (Max: ${currentOfferedQuantity})`, currentOfferedQuantity.toString());
+                        let quantityToRemove = parseInt(quantityStr, 10);
+
+                        if (isNaN(quantityToRemove) || quantityToRemove <= 0) {
+                            logTradeMessage("Invalid quantity entered for removal.", 'warn');
+                            return;
+                        }
+
+                        if (quantityToRemove > currentOfferedQuantity) {
+                            quantityToRemove = currentOfferedQuantity;
+                            logTradeMessage(`Removal quantity capped to offered amount: ${quantityToRemove}`, 'info');
+                        }
+
+                        sendMessage({
+                            type: "trade",
+                            trade_action: "remove_item",
+                            session_id: currentTradeSessionId,
+                            item_id: itemIdToRemove,
+                            quantity: quantityToRemove
+                        });
+                        logTradeMessage(`Attempting to remove ${quantityToRemove}x ${itemNameForLog} from trade.`, 'info');
+                        // UI update will happen on server confirmation via handleTradeStatus 'item_removed'
+                    });
+                    // --- END MODIFIED ---
+
+                    offerGrid.appendChild(itemElement);
+                } else {
+                    // Update existing element's quantity
+                    const quantitySpan = itemElement.querySelector('.item-quantity');
+                    if (quantitySpan) {
+                        // Server sends new_total_quantity, so we set it directly
+                        quantitySpan.textContent = `x${itemInfo.quantity}`;
+                    }
+                    // Icon and name should be correct from creation, no need to update here unless server sends new data
+                }
+            } else { // Removing
+                if (itemElement) {
+                    const quantitySpan = itemElement.querySelector('.item-quantity');
+                    let currentQuantity = 0;
+                    if (quantitySpan) {
+                        currentQuantity = parseInt(quantitySpan.textContent.replace('x', ''), 10) || 0;
+                    }
+                    // --- MODIFIED: Handle quantity removed vs. quantity remaining ---
+                    // Server sends the quantity removed. Calculate new quantity.
+                    const quantityRemoved = itemInfo.quantity || 1; // This is the quantity removed
+                    const newQuantity = currentQuantity - quantityRemoved;
+                    // --- END MODIFIED ---
+
+                    if (newQuantity <= 0) {
+                        // Remove element entirely
+                        itemElement.remove();
+                    } else {
+                        // Update quantity to the new calculated total
+                        if (quantitySpan) {
+                            quantitySpan.textContent = `x${newQuantity}`;
+                        }
+                    }
+                }
+                // If itemElement doesn't exist, it might have already been removed.
+            }
+        }
+
+        // Helper function to manage partner's offer display
+        function updatePartnerOfferDisplay(itemInfo, isAdding) {
+            const offerGrid = document.getElementById('tradePartnerOffer');
+            if (!offerGrid) {
+                console.error("Partner offer grid element (#tradePartnerOffer) not found.");
+                return;
+            }
+
+            const itemId = itemInfo.id;
+            const itemElementId = `trade-partner-offer-item-${itemId}`;
+            let itemElement = document.getElementById(itemElementId);
+
+            if (isAdding) {
+                // --- Find item details (name/icon) - server might send them, otherwise use defaults ---
+                // This logic is similar to updateYourOfferDisplay
+                let itemName = itemInfo.name;
+                let itemIconPath = itemInfo.iconPath || itemInfo.icon; // Accept both keys from server message
+                // If server doesn't send name/icon in trade_update, you might need to manage a separate
+                // data structure for known item details or request full item data.
+                // For now, assume server sends them or use defaults.
+                itemName = itemName || itemId || 'Unknown Item';
+                itemIconPath = itemIconPath || 'images/items/default-item.png';
+                // --- End find item details ---
+
+                // --- NEW: Use createInventoryItemElement helper ---
+                // Create a temporary item object with the data we have for the helper
+                const tempItemForHelper = {
+                    id: itemId,
+                    name: itemName,
+                    icon: itemIconPath, // Use 'icon' as expected by the helper
+                    quantity: itemInfo.quantity
+                };
+                // --- END NEW ---
+
+                if (!itemElement) {
+                    // --- MODIFIED: Use helper to create the base element ---
+                    itemElement = createInventoryItemElement(tempItemForHelper, true); // true for trade view
+                    itemElement.id = itemElementId;
+                    itemElement.className = 'trade-item trade-item-offered trade-item-partner'; // Set specific classes
+                    itemElement.dataset.itemId = itemId; // Ensure dataset is set
+                    // Remove any click listener that might have been added by the helper for trade inventory
+                    // by cloning without event listeners (or just don't add one)
+                    // itemElement = itemElement.cloneNode(true); // This removes listeners but also ID/classes if not careful
+                    // Better: Just don't add a listener here, or explicitly remove it if needed.
+                    // Since we are setting className directly after, listeners from helper are likely gone anyway.
+                    // --- END MODIFIED ---
+
+                    // --- OPTIONAL: Add visual indication it's partner's item, maybe disable interaction ---
+                    // The CSS class trade-item-partner should handle styling.
+                    // itemElement.style.opacity = '0.8'; // Example: Slightly faded
+                    // itemElement.style.cursor = 'default'; // Example: Not a pointer cursor
+                    // Or rely on CSS class trade-item-partner for styling
+                    // --- END OPTIONAL ---
+
+                    offerGrid.appendChild(itemElement);
+                } else {
+                    // Update existing element's quantity
+                    const quantitySpan = itemElement.querySelector('.item-quantity');
+                    if (quantitySpan) {
+                        // Assume server sends the new total quantity for partner updates too
+                        // Check handleTradeUpdate logic: msg.quantity is sent for partner_item_added/removed
+                        // For added: it's the quantity added (might need total if server sends delta)
+                        // For removed: it's the quantity removed (we need to calculate new total)
+                        // Based on the message structure you provided, it seems like for 'partner_item_removed',
+                        // 'quantity' is the amount removed. Let's handle it consistently.
+                        // Actually, looking at the standard pattern, server usually sends the NEW TOTAL for updates.
+                        // Let's assume itemInfo.quantity IS the new total quantity to display.
+                        // If the server sends the delta removed, we need to adjust handleTradeUpdate.
+                        // For now, let's assume itemInfo.quantity is the correct total to display.
+                        quantitySpan.textContent = `x${itemInfo.quantity}`;
+                    }
+                    // Icon and name should be correct from creation.
+                }
+            } else { // Removing (partner removed item)
+                if (itemElement) {
+                    const quantitySpan = itemElement.querySelector('.item-quantity');
+                    let currentQuantity = 0;
+                    if (quantitySpan) {
+                        currentQuantity = parseInt(quantitySpan.textContent.replace('x', ''), 10) || 0;
+                    }
+                    // --- MODIFIED: Handle quantity removed vs. quantity remaining ---
+                    // Server sends the quantity removed. Calculate new quantity.
+                    const quantityRemoved = itemInfo.quantity || 1; // This is the quantity removed (from msg)
+                    const newQuantity = currentQuantity - quantityRemoved;
+                    // --- END MODIFIED ---
+
+                    if (newQuantity <= 0) {
+                        // Remove element entirely
+                        itemElement.remove();
+                    } else {
+                        // Update quantity to the new calculated total
+                        if (quantitySpan) {
+                            quantitySpan.textContent = `x${newQuantity}`;
+                        }
+                    }
+                }
+                // If itemElement doesn't exist, it might have already been removed.
+            }
+        }
+
+        // --- END NEW ---
+
+
+        // --- NEW: Logging to Trade View ---
+        function logTradeMessage(message, category = 'info') {
+            const logDiv = document.getElementById('tradeMessages');
+            if (!logDiv) return;
+
+            const messageElement = document.createElement('div');
+            messageElement.className = `trade-message trade-message-${category}`;
+            // Simple formatting, consider using a library for richer logs
+            const timestamp = new Date().toLocaleTimeString();
+            messageElement.textContent = `[${timestamp}] ${message}`;
+
+            logDiv.appendChild(messageElement);
+            logDiv.scrollTop = logDiv.scrollHeight; // Auto-scroll to bottom
+        }
+        // --- END NEW ---
+
+
+        // --- NEW: Event Listeners for Trade Actions ---
+        document.addEventListener('DOMContentLoaded', function() {
+            // ... (existing event listeners) ...
+
+            // --- NEW: Trade Request Notification Buttons ---
+            document.getElementById('acceptTradeRequest')?.addEventListener('click', function() {
+                const notification = document.getElementById('tradeRequestNotification');
+                // --- MODIFIED: Get the session ID from the notification element ---
+                const sessionId = notification?.dataset?.sessionId; // Get stored Session ID
+                const requesterId = notification?.dataset?.requesterId;
+                // --- END MODIFIED ---
+                // --- MODIFIED: Check sessionId in addition to requesterId ---
+                if (requesterId && sessionId) { // Ensure both requester ID and Session ID are present
+                    // --- MODIFIED: Include session_id in the message ---
+                    sendMessage({
+                        type: "trade",
+                        trade_action: "response",
+                        session_id: sessionId, // Include the Session ID
+                        accepted: true
+                    });
+                    // --- END MODIFIED ---
+                    hideTradeRequest(); // Hide notification immediately
+                    logDebug("Trade request accepted.", 'info');
+                } else {
+                    // --- MODIFIED: Improved warning message ---
+                    console.warn("Cannot accept trade: Missing requester ID or session ID.");
+                    logDebug("Cannot accept trade: Missing requester ID or session ID.", 'error');
+                    // --- END MODIFIED ---
+                }
+            });
+
+            document.getElementById('declineTradeRequest')?.addEventListener('click', function() {
+                const notification = document.getElementById('tradeRequestNotification');
+                // --- MODIFIED: Get the session ID from the notification element ---
+                const sessionId = notification?.dataset?.sessionId; // Get stored Session ID
+                const requesterId = notification?.dataset?.requesterId;
+                // --- END MODIFIED ---
+                // --- MODIFIED: Check sessionId in addition to requesterId ---
+                if (requesterId && sessionId) { // Ensure both requester ID and Session ID are present
+                    // --- MODIFIED: Include session_id in the message ---
+                    sendMessage({
+                        type: "trade",
+                        trade_action: "response",
+                        session_id: sessionId, // Include the Session ID
+                        accepted: false
+                    });
+                    // --- END MODIFIED ---
+                    hideTradeRequest(); // Hide notification
+                    logDebug("Trade request declined.", 'info');
+                } else {
+                    console.warn("Cannot decline trade: Missing requester ID or session ID.");
+                    logDebug("Cannot decline trade: Missing requester ID or session ID.", 'error');
+                }
+            });
+            // --- END NEW ---
+
+
+            document.getElementById('tradeConfirm')?.addEventListener('click', function() {
+                if (!isTradeActive || !currentTradeSessionId) {
+                    logTradeMessage("Not in an active trade session.", 'warn');
+                    return;
+                }
+                if (confirm("Are you sure you want to confirm this trade?")) {
+                    sendMessage({
+                        type: "trade",
+                        trade_action: "confirm",
+                        session_id: currentTradeSessionId // Include session ID
+                    });
+                    logTradeMessage("Trade confirmation sent.", 'info');
+                }
+            });
+
+            document.getElementById('tradeCancel')?.addEventListener('click', function() {
+                // Cancel can be sent regardless of confirmation state
+                if (!isTradeActive && currentTradeSessionId === null) {
+                    // If no trade view and no session, it might be a lingering request notification
+                    hideTradeRequest();
+                    logDebug("Trade request notification cleared.", 'info');
+                    return;
+                }
+                if (confirm("Are you sure you want to cancel this trade?")) {
+                    sendMessage({
+                        type: "trade",
+                        trade_action: "cancel" // Session ID might be needed, or server tracks it
+                        // Include session ID if required by your server implementation
+                        // session_id: currentTradeSessionId
+                    });
+                    logTradeMessage("Trade cancellation sent.", 'info');
+                    // UI will be updated based on server's 'trade_status': 'cancelled' response
+                }
+            });
+            // --- END NEW ---
+
+        });
+        // --- END NEW ---
+
+
+
         /* helper to send WS messages */
         function sendMessage(payload) {
             if (ws && ws.readyState === 1) ws.send(JSON.stringify(payload));
@@ -815,6 +1767,12 @@
                 const statsEl = document.createElement('div');
                 statsEl.className = 'entity-stats';
                 statsEl.textContent = `Lv. ${playerData.level || 1}`; // Example stat
+
+                // Actions Remaining
+                const actionsEl = document.createElement('div');
+                actionsEl.className = 'entity-actions';
+                actionsEl.textContent = `Actions: ${playerData.actionsRemaining || 0}/${playerData.totalActions || 0}`;
+                playerEl.appendChild(actionsEl);
 
                 // HP Bar Container
                 const hpBarEl = document.createElement('div');
@@ -977,52 +1935,58 @@
                         return; // Skip this iteration
                     }
 
-                    const useAbilityBtn = document.createElement('button');
-                    useAbilityBtn.className = 'action-btn'; // You could add a specific class like 'ability-btn' if needed
-                    // Display name and cost
+                    const abilityBtn = document.createElement('button');
+                    abilityBtn.className = 'action-btn ability-btn';
+                    abilityBtn.dataset.abilityId = ability.id;
+                    
+                    // Create container for icon and text
+                    const btnContent = document.createElement('div');
+                    btnContent.className = 'ability-btn-content';
+                    
+                    // Add icon if available
+                    if (ability.iconPath) {
+                        const iconEl = document.createElement('img');
+                        iconEl.className = 'ability-icon';
+                        iconEl.src = ability.iconPath;
+                        iconEl.alt = ability.name;
+                        iconEl.onerror = function() {
+                            // Fallback if icon fails to load
+                            this.src = 'images/icons/default-ability.png';
+                        };
+                        btnContent.appendChild(iconEl);
+                    }
+                    
+                    // Add ability name and cost
+                    const textEl = document.createElement('span');
+                    textEl.className = 'ability-text';
                     let buttonText = ability.name;
                     if (ability.actionCost !== undefined && ability.actionCost > 0) {
                         buttonText += ` (${ability.actionCost} AP)`;
                     }
-                    useAbilityBtn.textContent = buttonText;
+                    textEl.textContent = buttonText;
+                    btnContent.appendChild(textEl);
                     
-                    // Tooltip with target types (optional)
+                    abilityBtn.appendChild(btnContent);
+                    
+                    // Tooltip with target types
                     if (Array.isArray(ability.targetTypes) && ability.targetTypes.length > 0) {
-                        useAbilityBtn.title = `Targets: ${ability.targetTypes.join(', ')}`;
+                        abilityBtn.title = `Targets: ${ability.targetTypes.join(', ')}`;
                     } else {
-                        useAbilityBtn.title = `Targets: Unknown`;
+                        abilityBtn.title = `Targets: Unknown`;
+                    }                
+                    // Just graying out button if not enough total actions. Server will still handle validation!
+                    const actionCost = ability.actionCost || 1;
+                    if (playerStats.totalActions < actionCost) {
+                        abilityBtn.classList.add('unaffordable');
+                    } else {
+                        abilityBtn.classList.remove('unaffordable');
                     }
-
-                    // Store the ability ID on the button for easy access
-                    useAbilityBtn.dataset.abilityId = ability.id; 
                     
-                    // On click, initiate the use_ability action
-                    useAbilityBtn.onclick = () => initiateAction('use_ability', { abilityId: ability.id });
+                    abilityBtn.onclick = () => initiateAction('use_ability', { abilityId: ability.id });
                     
-                    actionContainer.appendChild(useAbilityBtn);
+                    actionContainer.appendChild(abilityBtn);
                 });
             }
-
-
-            // --- 3. Use Item ---
-            // (Logic for items remains similar, but you might also want to fetch/update items via stats_update or a separate message)
-            // For now, assuming you have an items array in playerStats or elsewhere
-            /*
-            if (Array.isArray(playerStats.items) && playerStats.items.length > 0) {
-                const useItemBtn = document.createElement('button');
-                useItemBtn.className = 'action-btn';
-                useItemBtn.textContent = 'Use Item'; // Or first item name
-                useItemBtn.title = 'Select an item from your inventory.'; // Or first item description
-                useItemBtn.onclick = () => {
-                    // Logic to select item or use first/default item
-                    if (playerStats.items.length > 0) {
-                        const firstItem = playerStats.items[0];
-                        initiateAction('use_item', { itemId: firstItem.id });
-                    }
-                };
-                actionContainer.appendChild(useItemBtn);
-            }
-            */
 
             // --- 4. End Turn Button (Optional but Standard) ---
             const endTurnBtn = document.createElement('button');

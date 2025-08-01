@@ -23,13 +23,14 @@ public class EncounterManager : MonoBehaviour
         Defeat     // Players lose
     }
 
-    [Header("Test Setup")]
-    [Tooltip("Drag an EnemyDefinition here for quick testing.")]
-    public EnemyDefinition testEnemyDefinition;
-
     [Header("Enemy Spawn Transfrom")]
     [Tooltip("Drag a Transform here for the enemy spawnpoint.")]
     public Transform enemyList;
+
+    [Header("Player Spawn Transform")]
+    [Tooltip("Drag a Transform here for the player spawn point.")]
+    public Transform playerList; // Add this line
+
 
     // --- NEW: Fields to accumulate rewards ---
     private long _totalXpAccumulated = 0;
@@ -117,6 +118,8 @@ public class EncounterManager : MonoBehaviour
             {
                 // Also sending statsUpdate so abilities are populated even if no equipment has been equipped
                 player.SendStatsUpdateToClient();
+                // Spawn the visual prefab
+                SpawnPlayerVisual(player, playerList); 
                 AddPlayer(player);
             }
         }
@@ -155,6 +158,65 @@ public class EncounterManager : MonoBehaviour
         Debug.Log($"EncounterManager: Added player {player.LobbyData?.Name ?? "Unknown"} ({player.NetworkId}) to encounter.");
     }
 
+    // --- Method to Spawn Player Visual GameObject ---
+    /// <summary>
+    /// Instantiates a player's visual representation and associates it with the PlayerConnection.
+    /// The PlayerConnection itself is managed by PlayerManager and added to the encounter via AddPlayer.
+    /// </summary>
+    /// <param name="playerConnection">The PlayerConnection instance containing player data.</param>
+    /// <param name="spawnPointParent">The Transform under which to instantiate the player visual object.</param>
+    private void SpawnPlayerVisual(PlayerConnection playerConnection, Transform spawnPointParent)
+    {
+        if (playerConnection == null)
+        {
+            Debug.LogError("Cannot spawn player visual, player connection is null.");
+            return;
+        }
+
+        // 1. Determine the prefab to use based on the player's class definition.
+        GameObject playerPrefab = null;
+        if (playerConnection.ClassDefinition != null)
+        {
+            playerPrefab = playerConnection.ClassDefinition.characterPrefab;
+        }
+
+        if (playerPrefab == null)
+        {
+            Debug.LogWarning($"Player prefab not found for {playerConnection.LobbyData?.Name ?? "Unknown Player"} (Class: {playerConnection.ClassDefinition?.className ?? "Unknown"}). Using default primitive.");
+            // Fallback: Create a simple capsule as a placeholder
+            playerPrefab = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            playerPrefab.name = "DefaultPlayerModel";
+        }
+
+        // 2. Instantiate the player's visual/model prefab under the specified parent transform.
+        Debug.Log($"Attempting to spawn player visual prefab: {playerPrefab.name}");
+        GameObject playerVisualGO = Instantiate(playerPrefab, spawnPointParent);
+        playerVisualGO.name = $"PlayerVisual_{playerConnection.LobbyData?.Name ?? playerConnection.NetworkId ?? "Unknown"}";
+
+        Debug.Log($"Spawned player visual GameObject: {playerVisualGO.name} at position {playerVisualGO.transform.position}");
+
+        // 3. Link the PlayerConnection to the spawned visual GameObject.
+        // Option A: If your player prefab already has a component (let's call it PlayerVisualHandler)
+        // that needs the PlayerConnection reference:
+        PlayerVisualLink visualLink = playerVisualGO.GetComponent<PlayerVisualLink>();
+        if (visualLink != null)
+        {
+            visualLink.LinkToPlayer(playerConnection);
+        }
+        else
+        {
+             Debug.LogWarning($"Player prefab {playerPrefab.name} did not have PlayerVisualLink component.");
+        }
+        
+        // 4. (Optional) Initialize visual properties based on PlayerConnection data
+        // E.g., Set name tag, class color, equipment visuals if managed by the visual prefab's scripts.
+        // This would typically be handled by the component(s) on the playerVisualGO itself,
+        // perhaps in their Start() or Awake() methods, now that they have the PlayerConnection reference.
+
+        Debug.Log($"EncounterManager: Spawned visual for player {playerConnection.LobbyData?.Name ?? "Unknown"} ({playerConnection.NetworkId}).");
+    }
+
+
     private void SpawnEnemy(EnemyDefinition enemyDef, Transform enemyList, int level = 1)
     {
         if (enemyDef?.modelPrefab == null)
@@ -184,17 +246,17 @@ public class EncounterManager : MonoBehaviour
         // For now, let's assume it reads the definition from its serialized field or Awake handles it if not set.
         // If you need to pass data explicitly:
         enemyEntity.InitializeFromDefinition(level);
-        
+
         enemyEntity.EncounterManager = this; // Set the reference
-        // EnemyEntity.Awake should then initialize stats etc. based on the definition.
-        // If level needs to be passed explicitly and EnemyEntity.Awake runs before we can set it,
-        // you might need to call an Initialize method after setting the definition.
-        // Let's assume EnemyEntity.Awake handles initialization if _enemyDefinition is set.
-        
+                                             // EnemyEntity.Awake should then initialize stats etc. based on the definition.
+                                             // If level needs to be passed explicitly and EnemyEntity.Awake runs before we can set it,
+                                             // you might need to call an Initialize method after setting the definition.
+                                             // Let's assume EnemyEntity.Awake handles initialization if _enemyDefinition is set.
+
         // 4. Register the enemy with this EncounterManager
         _activeEnemies.Add(enemyEntity);
         // Use InstanceId for now, but consider a more robust unique ID if needed.
-        _activeEnemiesDict.Add(enemyEntity.GetInstanceID(), enemyEntity); 
+        _activeEnemiesDict.Add(enemyEntity.GetInstanceID(), enemyEntity);
         OnEnemyAdded?.Invoke(enemyEntity);
         Debug.Log($"EncounterManager: Spawned and added enemy {enemyEntity.GetEntityName()} (Instance ID: {enemyEntity.GetInstanceID()}) to encounter.");
     }

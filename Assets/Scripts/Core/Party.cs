@@ -130,7 +130,10 @@ public class Party : IParty
                 ["members"] = this.Members.Select(m => new Dictionary<string, object>
                 {
                     ["id"] = m.NetworkId,
-                    ["name"] = m.LobbyData?.Name ?? "Unknown"
+                    ["name"] = m.LobbyData?.Name ?? "Unknown",
+                    ["currentHealth"] = m.CurrentHealth,
+                    ["maxHealth"] = m.MaxHealth,
+                    ["iconPath"] = $"images/players/{m.ClassDefinition.classIcon.name}.png"
                     // Add other relevant member info if needed by client
                 }).ToList()
             }
@@ -140,6 +143,8 @@ public class Party : IParty
         {
             if (member != null && GameServer.Instance != null) // Check for nulls
             {
+                //Also sending a statsUpdate as "party_update" not implemented on client side
+                member.SendStatsUpdateToClient();
                 GameServer.Instance.SendToPlayer(member.NetworkId, partyUpdateData);
             }
         }

@@ -37,6 +37,8 @@ public class InventoryService : MonoBehaviour
         inventory.InitializeWithItems(startingItems);
         _playerInventories[playerId] = inventory;
         Debug.Log($"Initialized inventory for player {playerId} with {startingItems.Count} starting items.");
+        // sending players the first inventory update
+        SendInventoryUpdate(playerId);
     }
     
 
@@ -216,28 +218,31 @@ public class InventoryService : MonoBehaviour
             return false;
         }
 
-        // 2. FIND the InventorySlot - Crucial Change: Look in both Bag and Equipped locations
-        // Previously, this only looked in the bag, which failed for unequipping.
+
+        // 2. FIND the InventorySlot - Use PlayerInventory helpers for cleaner code
+        // Prioritize finding the item in equipped slots first to handle unequipping correctly
+        // when duplicates exist in bag and equipped.
         InventorySlot itemSlotToUse = null;
 
-        // a. First, try to find the item in the Bag
-        itemSlotToUse = inventory.GetBagSlot(itemId);
 
-        // b. If not found in the bag, try to find it in the Equipped Items
+
+        // a. First, try to find the item in the Equipped Items using the new helper
+        itemSlotToUse = inventory.GetEquippedSlot(itemId);
+        if (itemSlotToUse != null)
+        {
+            Debug.Log($"InventoryService.UseItem: Found item ID '{itemId}' in equipped slots. Prioritizing this instance.");
+        }
+
+        // b. If NOT found in equipped slots, try to find it in the Bag using the existing helper
         if (itemSlotToUse == null)
         {
-            // We need to iterate the equipped dictionary to find by itemId
-            // PlayerInventory could have a helper, but we do it here for clarity.
-            foreach (var kvp in inventory.EquippedItems)
+            itemSlotToUse = inventory.GetBagSlot(itemId); // <-- Use existing helper method
+            if (itemSlotToUse != null)
             {
-                if (kvp.Value != null && kvp.Value.itemId == itemId)
-                {
-                    itemSlotToUse = kvp.Value;
-                    Debug.Log($"Found item '{itemId}' to use in Equipped slot '{kvp.Key}'.");
-                    break; // Found it, stop searching
-                }
+                Debug.Log($"InventoryService.UseItem: Found item ID '{itemId}' in the bag.");
             }
         }
+
 
         // 3. Validate Item Found and Has Definition
         if (itemSlotToUse == null || itemSlotToUse.ItemDef == null)

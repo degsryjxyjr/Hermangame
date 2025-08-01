@@ -480,10 +480,15 @@ button {
     background-color: #1976d2;
 }
 
-.action-btn:disabled {
-    background-color: #616161;
-    cursor: not-allowed;
-    opacity: 0.6;
+/* Replace or add these styles */
+.action-btn.unaffordable {
+    opacity: 0.7;
+    filter: grayscale(70%);
+}
+
+.action-btn.unaffordable:hover {
+    opacity: 0.9;
+    filter: grayscale(50%);
 }
 
 .action-btn.end-turn {
@@ -493,6 +498,48 @@ button {
 .action-btn.end-turn:hover:not(:disabled) {
     background-color: #f57c00;
 }
+
+
+
+.ability-btn {
+    text-align: left;
+    justify-content: flex-start;
+}
+
+.ability-btn-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ability-icon {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+}
+
+.ability-text {
+    flex-grow: 1;
+}
+
+.actions-remaining {
+    font-weight: bold;
+    padding: 8px;
+    margin: 4px;
+    background-color: rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+    text-align: center;
+}
+
+.entity-actions {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-bottom: 8px;
+    text-align: center;
+    color: #ffffff;
+    margin: 4px 0;
+}
+
 
 #combatLog {
     background-color: #222;
@@ -576,3 +623,342 @@ button {
         font-size: 0.9em;
     }
 }
+
+/* --- NEW: Party Display Styles --- */
+#partyDisplay {
+    margin-top: 20px;
+    padding: 10px;
+    border: 1px solid #444;
+    border-radius: 5px;
+    background-color: #00ffff;
+}
+
+#partyDisplay h3 {
+    margin-top: 0;
+}
+
+#partyMembersList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px; /* Space between members */
+}
+
+.party-member {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px;
+    border: 1px solid #555;
+    border-radius: 5px;
+    background-color: #333;
+    cursor: pointer; /* Indicate it's clickable */
+    transition: background-color 0.2s;
+}
+
+.party-member:hover {
+    background-color: #444; /* Highlight on hover */
+}
+
+.party-member-icon {
+    width: 50px;
+    height: 50px;
+    object-fit: cover; /* Ensure icon fits */
+    margin-bottom: 5px;
+    border-radius: 50%; /* Make icons circular if desired */
+}
+
+.party-member-name {
+    font-weight: bold;
+    margin-bottom: 3px;
+}
+
+.party-member-hp {
+    font-size: 0.9em;
+    color: #ccc;
+}
+/* --- END NEW --- */
+
+
+/* --- NEW: Trade Request Notification Styles --- */
+.notification {
+    position: fixed; /* Or relative/absolute within gameView */
+    top: 20px;
+    right: 20px;
+    padding: 15px;
+    background-color: #333;
+    color: white;
+    border: 1px solid #555;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    z-index: 1000; /* Ensure it's on top */
+}
+
+.notification button {
+    margin-left: 10px;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.notification button:hover {
+    opacity: 0.8;
+}
+
+#acceptTradeRequest {
+    background-color: #4CAF50; /* Green */
+    color: white;
+}
+
+#declineTradeRequest {
+    background-color: #f44336; /* Red */
+    color: white;
+}
+/* --- END NEW --- */
+
+
+/* --- NEW: Trade View Styles --- */
+#tradeView {
+    padding: 20px;
+    background-color: #111;
+    color: #eee;
+    height: 100%; /* Or adjust based on your layout */
+    overflow-y: auto; /* Allow scrolling if content is large */
+}
+
+#tradeView h2, #tradeView h3, #tradeView h4, #tradeView h5 {
+    color: #fff;
+}
+
+.trade-sections-container {
+    display: flex;
+    justify-content: space-between;
+    gap: 20px; /* Space between your inventory and partner's */
+    margin-bottom: 20px;
+}
+
+.trade-section {
+    flex: 1; /* Take up equal space */
+    border: 1px solid #444;
+    border-radius: 5px;
+    padding: 10px;
+    background-color: #222;
+}
+
+.trade-inventory-grid, .trade-offer-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); /* Adjust item size */
+    gap: 10px;
+    margin-top: 10px;
+    min-height: 100px; /* Give some space even when empty */
+    background-color: #1a1a1a;
+    padding: 10px;
+    border-radius: 3px;
+}
+/* Styles for items specifically in the trade view's 'Your Inventory' grid */
+.trade-inventory-item,
+#tradeYourInventory .trade-inventory-item {
+    /* Copy styles from .inventory-item */
+    text-align: center;
+    color: white;
+    /* Add other styles like padding, border, background if desired */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 5px;
+    border: 1px solid #555;
+    border-radius: 5px;
+    background-color: #333;
+    cursor: pointer; /* Indicate it's clickable */
+}
+
+.trade-inventory-item:hover {
+    background-color: #3a3a3a; /* Highlight on hover */
+    cursor: pointer; /* Clearly indicate it's clickable */
+}
+
+/* Style for empty state in trade inventory */
+.trade-inventory-empty {
+    font-style: italic;
+    color: #888;
+    text-align: center;
+    padding: 20px;
+    grid-column: 1 / -1; /* Span full width if using grid */
+}
+
+/* Ensure items in the trade inventory grid have the correct size */
+.trade-inventory-item img,
+#tradeYourInventory .trade-inventory-item img {
+    /* Copy styles from .inventory-item img */
+    width: 60px;
+    height: 60px;
+    object-fit: contain;
+    margin-bottom: 8px;
+}
+
+
+.trade-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 5px;
+    border: 1px solid #555;
+    border-radius: 3px;
+    background-color: #333;
+    cursor: pointer; /* Or not, if not selectable directly in grid */
+    transition: background-color 0.2s;
+}
+
+.trade-item:hover {
+    background-color: #444;
+}
+
+.trade-item-icon {
+    width: 40px;
+    height: 40px;
+    object-fit: cover;
+    margin-bottom: 3px;
+}
+
+.trade-item-name {
+    font-size: 0.8em;
+    text-align: center;
+    word-break: break-word; /* Handle long names */
+}
+
+.trade-item-quantity {
+    font-size: 0.8em;
+    color: #ccc;
+}
+
+/* --- NEW: Ensure items in YOUR OFFER grid have the correct size --- */
+/* Target the container div */
+#tradeYourOffer .trade-item,
+.trade-offer-grid .trade-item-yours { /* Fallback selector */
+    /* Inherit or copy styles from .trade-inventory-item */
+    text-align: center;
+    color: white; /* Or inherit */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 5px;
+    border: 1px solid #555; /* Example border */
+    border-radius: 5px;
+    /* Specific background for your items? */
+    background-color: #2a442a; /* Darker greenish, as in previous suggestion */
+    /* Cursor is handled by .trade-item */
+}
+
+/* Target the image inside */
+#tradeYourOffer .trade-item .item-icon,
+.trade-offer-grid .trade-item-yours .item-icon { /* Fallback selector */
+    /* Copy styles from .trade-inventory-item img */
+    width: 60px;
+    height: 60px;
+    object-fit: contain;
+    margin-bottom: 8px;
+}
+/* --- END NEW --- */
+
+
+/* --- NEW: Ensure items in PARTNER'S OFFER grid have the correct size --- */
+/* Target the container div */
+#tradePartnerOffer .trade-item,
+.trade-offer-grid .trade-item-partner { /* Fallback selector */
+    /* Inherit or copy styles from .trade-inventory-item */
+    text-align: center;
+    color: white; /* Or inherit */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 5px;
+    border: 1px solid #555; /* Example border */
+    border-radius: 5px;
+    /* Specific background for partner items? */
+    background-color: #442a2a; /* Darker reddish, as in previous suggestion */
+    /* Cursor is handled by .trade-item-partner */
+}
+
+/* Target the image inside */
+#tradePartnerOffer .trade-item .item-icon,
+.trade-offer-grid .trade-item-partner .item-icon { /* Fallback selector */
+    /* Copy styles from .trade-inventory-item img */
+    width: 60px;
+    height: 60px;
+    object-fit: contain;
+    margin-bottom: 8px;
+}
+/* --- END NEW --- */
+
+
+.trade-item-offered {
+    /* Style for items in the offer grids */
+    background-color: #2a442a; /* Slightly different bg for offered items */
+}
+
+/* Style for items specifically in YOUR offer grid */
+.trade-item-yours {
+    /* Example: Slightly different background or border */
+    background-color: #2a442a; /* Darker greenish */
+    border-color: #4CAF50; /* Green border */
+}
+
+/* Style for items specifically in PARTNER's offer grid */
+.trade-item-partner {
+    /* Example: Slightly different background or border */
+    background-color: #442a2a; /* Darker reddish */
+    border-color: #f44336; /* Red border */
+    /* Example: Make it look less interactive */
+    opacity: 0.9;
+    cursor: default; /* Not a pointer */
+}
+
+.trade-actions {
+    margin: 20px 0;
+    text-align: center;
+}
+
+.trade-actions button {
+    padding: 10px 15px;
+    margin: 0 5px;
+    border: none;
+    border-radius: 3px;
+    background-color: #555;
+    color: white;
+    cursor: pointer;
+}
+
+.trade-actions button:hover {
+    background-color: #666;
+}
+
+#tradeConfirm {
+    background-color: #4CAF50; /* Green */
+}
+
+#tradeCancel {
+    background-color: #f44336; /* Red */
+}
+
+#tradeMessages {
+    margin-top: 20px;
+    padding: 10px;
+    border: 1px solid #444;
+    border-radius: 5px;
+    background-color: #222;
+    height: 150px; /* Fixed height */
+    overflow-y: auto; /* Scrollable log */
+    font-family: monospace; /* Monospace for log style */
+    font-size: 0.9em;
+}
+
+.trade-message {
+    margin-bottom: 5px;
+    padding: 2px 0;
+}
+
+.trade-message-info { color: #66d3e4; }
+.trade-message-warn { color: #ffcc00; }
+.trade-message-error { color: #ff6666; }
+.trade-message-success { color: #66ff66; }
+/* --- END NEW --- */

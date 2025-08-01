@@ -296,8 +296,8 @@ MonoBehaviour:
   m_StartAxis: 1
   m_CellSize: {x: 200, y: 200}
   m_Spacing: {x: 15, y: 15}
-  m_Constraint: 1
-  m_ConstraintCount: 2
+  m_Constraint: 2
+  m_ConstraintCount: 3
 --- !u!1 &966332327
 GameObject:
   m_ObjectHideFlags: 0
@@ -539,8 +539,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 684aa6c303dca0743aa9c8beae26ff75, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  testEnemyDefinition: {fileID: 0}
   enemyList: {fileID: 1927800061}
+  playerList: {fileID: 437493630}
 --- !u!4 &1155483849
 Transform:
   m_ObjectHideFlags: 0
@@ -750,8 +750,8 @@ MonoBehaviour:
   m_StartAxis: 1
   m_CellSize: {x: 200, y: 200}
   m_Spacing: {x: 15, y: 15}
-  m_Constraint: 1
-  m_ConstraintCount: 2
+  m_Constraint: 2
+  m_ConstraintCount: 3
 --- !u!1 &2079330274
 GameObject:
   m_ObjectHideFlags: 0
