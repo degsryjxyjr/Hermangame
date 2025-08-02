@@ -40,6 +40,49 @@ public class InventoryService : MonoBehaviour
         // sending players the first inventory update
         SendInventoryUpdate(playerId);
     }
+
+
+    /// <summary>
+    /// Removes a player's inventory from playerInventories dict.
+    /// </summary>
+    public void RemoveInventory(string playerId)
+    {
+        _playerInventories.Remove(playerId);
+        Debug.Log($"Removed inventory for player {playerId}!");
+    }
+    
+
+    /// <summary>
+    /// Creates a new temp PlayerInventory for a given ID if one doesn't already exist.
+    /// Or return the existing one
+    /// Useful for non-player entities like shops that need inventory management.
+    /// </summary>
+    /// <param name="id">The ID for the inventory.</param>
+    /// <returns>The existing or newly created PlayerInventory.</returns>
+    public PlayerInventory InitializeOrGetTempInventory(string id, int coinAmount = 0, List<ItemDefinition> startingItems = null)
+    {
+        if (!_playerInventories.TryGetValue(id, out PlayerInventory inventory))
+        {
+            // create inv with items
+            var tmp_inv = new PlayerInventory();
+            if (startingItems != null)
+            {
+                tmp_inv.InitializeWithItems(startingItems);
+            }
+            _playerInventories[id] = tmp_inv;
+            // add coins to the inv
+            if (coinAmount != 0)
+            {
+                ItemDefinition coin = GetItemDefinition("coin");
+                AddItem(id, coin, coinAmount);
+            }
+
+            Debug.Log($"Initialized temp inventory for {id}");
+            return _playerInventories[id];
+        }
+
+        return inventory;
+    }
     
 
 

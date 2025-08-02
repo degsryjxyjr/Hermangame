@@ -11,6 +11,8 @@ public class ItemDefinition : ScriptableObject
     [Header("Basic")]
     public string itemId; // Consider making this [SerializeField] private set; and providing a getter if you want to prevent accidental changes after creation
     public string displayName;
+
+    public int basePrice = 1;
     public Sprite icon;
     
     public enum ItemType { Consumable, Equipment, Quest, Material }

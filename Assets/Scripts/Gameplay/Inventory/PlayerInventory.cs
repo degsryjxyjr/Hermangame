@@ -295,7 +295,15 @@ public class PlayerInventory
         }
     }
 
-    
+    public int GetTotalQuantity(string ItemId)
+    {
+        if (string.IsNullOrEmpty(ItemId)) return 0;
+        
+        return BagItems.Where(s => s?.itemId == ItemId).Sum(s => s.quantity) 
+            + EquippedItems.Values.Where(s => s?.itemId == ItemId).Sum(s => s.quantity);
+    }
+
+
     /// <summary>
     /// Gets all items currently in the bag.
     /// </summary>

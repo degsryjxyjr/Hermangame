@@ -14,6 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   itemId: health_potion_02
   displayName: Debug Health Potion
+  basePrice: 2
   icon: {fileID: 21300000, guid: 9443509c6be388b42ae7a61b3e4e3ee9, type: 3}
   itemType: 0
   isStackable: 1
@@ -22,6 +23,7 @@ MonoBehaviour:
   attackModifier: 0
   defenseModifier: 0
   magicModifier: 0
+  actionModifier: 0
   linkedAbilities:
   - {fileID: 11400000, guid: dc26027646483844bb956b459bd27928, type: 2}
   equipSlot: 0

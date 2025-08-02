@@ -28,6 +28,22 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 0e9b66ba14f3bfb448a5cfd540bdf6de, type: 2}
   startingEquipment:
   - {fileID: 11400000, guid: 69927346d4c63504cb76633e9f940e05, type: 2}
+  - {fileID: 11400000, guid: bef53db837a07e34982415a5e9a6be9d, type: 2}
+  - {fileID: 11400000, guid: bef53db837a07e34982415a5e9a6be9d, type: 2}
+  - {fileID: 11400000, guid: bef53db837a07e34982415a5e9a6be9d, type: 2}
+  - {fileID: 11400000, guid: bef53db837a07e34982415a5e9a6be9d, type: 2}
+  - {fileID: 11400000, guid: bef53db837a07e34982415a5e9a6be9d, type: 2}
+  - {fileID: 11400000, guid: bef53db837a07e34982415a5e9a6be9d, type: 2}
+  - {fileID: 11400000, guid: bef53db837a07e34982415a5e9a6be9d, type: 2}
+  - {fileID: 11400000, guid: bef53db837a07e34982415a5e9a6be9d, type: 2}
+  - {fileID: 11400000, guid: bef53db837a07e34982415a5e9a6be9d, type: 2}
+  - {fileID: 11400000, guid: bef53db837a07e34982415a5e9a6be9d, type: 2}
+  - {fileID: 11400000, guid: bef53db837a07e34982415a5e9a6be9d, type: 2}
+  - {fileID: 11400000, guid: bef53db837a07e34982415a5e9a6be9d, type: 2}
+  - {fileID: 11400000, guid: bef53db837a07e34982415a5e9a6be9d, type: 2}
+  - {fileID: 11400000, guid: bef53db837a07e34982415a5e9a6be9d, type: 2}
+  - {fileID: 11400000, guid: bef53db837a07e34982415a5e9a6be9d, type: 2}
+  - {fileID: 11400000, guid: bef53db837a07e34982415a5e9a6be9d, type: 2}
   levelUpBonuses:
   - targetLevel: 2
     maxHealthBonus: 5
