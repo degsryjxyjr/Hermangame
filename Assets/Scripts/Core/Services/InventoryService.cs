@@ -181,12 +181,11 @@ public class InventoryService : MonoBehaviour
             return false;
         }
 
-        // --- Validation: Check source has enough ---
-        // Find the item slot in the source player's bag
-        var sourceItemSlot = fromInventory.BagItems.Find(slot => slot.itemId == itemId);
-        if (sourceItemSlot == null || sourceItemSlot.quantity < quantity)
+        // --- Validation: Check source has enough using GetTotalQuantity ---
+        int sourceTotalQuantity = fromInventory.GetTotalQuantity(itemId);
+        if (sourceTotalQuantity < quantity)
         {
-            Debug.LogWarning($"InventoryService.TransferItem: Player {fromPlayerId} does not have enough {itemId} to transfer ({sourceItemSlot?.quantity ?? 0} < {quantity}).");
+            Debug.LogWarning($"InventoryService.TransferItem: Player {fromPlayerId} does not have enough {itemId} to transfer ({sourceTotalQuantity} < {quantity}).");
             return false;
         }
 

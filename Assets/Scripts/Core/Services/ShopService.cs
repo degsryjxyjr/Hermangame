@@ -484,8 +484,11 @@ public class ShopService : MonoBehaviour
 
     // Called when a player sends a "shop_action" message (e.g., via WebSocket)
     // This is the primary entry point for networked player interactions.
-    public void HandleMessage(string playerId, Dictionary<string, object> message)
+    public void HandleMessage(PlayerConnection player, Dictionary<string, object> message)
     {
+
+        string playerId = player.NetworkId;
+
         if (message == null || !message.ContainsKey("action"))
         {
             Debug.LogWarning("ShopService: Received shop message missing 'action' field.");
@@ -593,9 +596,7 @@ public class ShopService : MonoBehaviour
             SendErrorMessage(playerId, "Your inventory could not be accessed.");
             return;
         }
-        // Assuming PlayerInventory has a method like GetTotalQuantity or specific coin handling
-        // Check Pasted_Text_1754141553131.txt / Pasted_Text_1754141542487.txt for exact method name
-        // Let's assume GetTotalQuantity exists based on context clues.
+        //  PlayerInventory has a method GetTotalQuantity
         int playerCoins = playerInventory.GetTotalQuantity(_coinItemId);
         if (playerCoins < totalCost)
         {
@@ -661,12 +662,13 @@ public class ShopService : MonoBehaviour
                 ["action"] = "buy",
                 ["success"] = true,
                 ["item_id"] = itemId,
+                ["item_name"] = itemDef.displayName,
                 ["quantity"] = quantity,
                 ["total_cost"] = totalCost,
                 ["slot_index"] = itemSlotIndex // Inform client/UI which slot was affected
             };
             GameServer.Instance.SendToPlayer(playerId, successData);
-            Debug.Log($"ShopService: Player {playerId} successfully bought {quantity}x {itemId} for {totalCost} coins.");
+            Debug.Log($"ShopService: Player {playerId} successfully bought {quantity}x {itemId} which is{itemDef.displayName} for {totalCost} coins.");
 
             // Update the server-side UI to reflect the sold item
             // Find the UI element corresponding to the slot and remove/disable it
@@ -675,6 +677,9 @@ public class ShopService : MonoBehaviour
             // Option 2: Iterate through _itemsUIParent children and find one tagged/linked to slotIndex
             // For simplicity here, just call UpdateShopUI to rebuild (inefficient but works)
             // A more efficient way would be to find the specific UI element and destroy it.
+
+            // broadcasting shop data update so bought item is removed from clientUI
+            BroadcastShopData();
             UpdateShopUI(); // TODO: Optimize this to only remove the specific item's UI element
 
         }

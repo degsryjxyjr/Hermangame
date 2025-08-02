@@ -962,3 +962,186 @@ button {
 .trade-message-error { color: #ff6666; }
 .trade-message-success { color: #66ff66; }
 /* --- END NEW --- */
+
+#shopView {
+    padding: 20px;
+    max-width: 1000px;
+    margin: 0 auto;
+    color: #333;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+#shopStatus {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 10px;
+    background-color: #f0f0f0;
+    border-radius: 5px;
+}
+
+#shopMessageArea {
+    padding: 10px;
+    margin-bottom: 15px;
+    border-radius: 5px;
+    text-align: center;
+    font-weight: bold;
+}
+#shopMessageArea.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+#shopMessageArea.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+#shopMainArea {
+    display: flex;
+    gap: 20px; /* Space between shop and player inventory */
+    flex-wrap: wrap; /* Allow wrapping on smaller screens */
+}
+
+#shopInventorySection, #playerInventorySection {
+    flex: 1; /* Take equal space */
+    min-width: 300px; /* Minimum width before wrapping */
+    background-color: #fafafa;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+#shopInventorySection h2, #playerInventorySection h2 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #555;
+    text-align: center;
+}
+
+.items-container {
+    display: grid;
+    /* Define columns: min 120px width, 10px gap */
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+    /* Ensure grid items stretch to fill container height somewhat */
+    align-items: start;
+}
+/* --- Updated Item Card Styles --- */
+.shop-item, .player-item {
+    width: 120px;
+    /*height: 150px; */
+    position: relative;
+    border: 1px solid #ddd;
+    padding: 5px;
+    text-align: center;
+    background-color: #fff;
+    transition: all 0.2s ease;
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.shop-item:hover, .player-item:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+/* Item Icon */
+.shop-item .item-icon, .player-item .item-icon {
+    max-width: 100%;
+    max-height: 60px;
+    width: auto;
+    height: auto;
+    margin: 0 auto 5px auto;
+    object-fit: contain;
+}
+
+/* Item Name - Fancy Font */
+.shop-item .item-name, .player-item .item-name {
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    color: #2c3e50;
+    margin: 3px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+}
+
+/* Item Price - Top Right Corner */
+.shop-item .item-price, .player-item .item-price {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background-color: rgba(255, 215, 0, 0.9); /* Gold color with transparency */
+    color: #5a4a00;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Quantity Display */
+.shop-item .item-quantity, .player-item .item-quantity {
+    font-family: 'Roboto', sans-serif;
+    font-size: 12px;
+    color: #7f8c8d;
+    margin: 2px 0;
+}
+
+/* Action Buttons */
+.shop-item .item-actions, .player-item .item-actions {
+    margin-top: auto;
+    padding-top: 5px;
+}
+
+.shop-item .buy-button, .player-item .sell-button {
+    padding: 5px 10px;
+    font-size: 12px;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 600;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 90%;
+    margin: 0 auto;
+}
+
+.shop-item .buy-button {
+    background: linear-gradient(to bottom, #4CAF50, #3d8b40);
+    color: white;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.2);
+}
+
+.player-item .sell-button {
+    background: linear-gradient(to bottom, #FF9800, #e68a00);
+    color: white;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.2);
+}
+
+.shop-item .buy-button:hover {
+    background: linear-gradient(to bottom, #45a049, #367c39);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.player-item .sell-button:hover {
+    background: linear-gradient(to bottom, #f57c00, #d67000);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Disabled state */
+.shop-item .buy-button:disabled,
+.player-item .sell-button:disabled {
+    background: #cccccc;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* Ensure item elements within shop/player containers look consistent */
+#shopItemsContainer .inventory-item,
+#playerItemsContainer .inventory-item {
+    /* Override any default inventory-item styles if needed for grid */
+    margin: 0; /* Remove default margin from .inventory-item if it exists */
+    /* The .inventory-item styles for icon, name, quantity should still apply */
+}

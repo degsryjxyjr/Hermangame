@@ -236,7 +236,7 @@ public class ShopDebugWindow : EditorWindow
         if (playerNames.Length == 0 || selectedPlayerIndex >= playerNames.Length) 
             return;
 
-        var playerId = PlayerManager.Instance.GetAllPlayers()[selectedPlayerIndex].NetworkId;
+        var player = PlayerManager.Instance.GetAllPlayers()[selectedPlayerIndex];
         
         // Create the same message a real client would send
         var buyMessage = new Dictionary<string, object> {
@@ -247,7 +247,7 @@ public class ShopDebugWindow : EditorWindow
         };
 
         // Call the shop service directly (simulating network message)
-        ShopService.Instance.HandleMessage(playerId, buyMessage);
+        ShopService.Instance.HandleMessage(player, buyMessage);
         
         // Schedule a refresh rather than doing it immediately
         needsRefresh = true;
@@ -267,7 +267,7 @@ public class ShopDebugWindow : EditorWindow
              return;
          }
 
-         var playerId = PlayerManager.Instance.GetAllPlayers()[selectedPlayerIndex].NetworkId;
+         var player = PlayerManager.Instance.GetAllPlayers()[selectedPlayerIndex];
 
          // Create the same message a real client would send for selling
          var sellMessage = new Dictionary<string, object> {
@@ -278,7 +278,7 @@ public class ShopDebugWindow : EditorWindow
          };
 
          // Call the shop service directly (simulating network message)
-         ShopService.Instance.HandleMessage(playerId, sellMessage);
+         ShopService.Instance.HandleMessage(player, sellMessage);
 
          // Schedule a refresh
          needsRefresh = true;

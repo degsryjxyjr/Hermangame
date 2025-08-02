@@ -89,27 +89,54 @@ public class PlayerInventory
     }
 
     /// <summary>
-    /// Removes a specified quantity of an item from the bag.
+    /// Removes a specified quantity of an item from the bag, handling multiple stacks.
     /// </summary>
+    /// <param name="itemId">The ID of the item to remove.</param>
+    /// <param name="quantity">The quantity to remove.</param>
+    /// <returns>True if the items were successfully removed, false otherwise.</returns>
     public bool RemoveItemFromBag(string itemId, int quantity = 1)
     {
-        var slot = GetBagSlot(itemId);
-        if (slot == null)
+        if (string.IsNullOrEmpty(itemId) || quantity <= 0)
         {
-            Debug.Log($"Cannot remove item from bag, slot not found for ID: {itemId}");
+            Debug.LogWarning($"Invalid parameters for RemoveItemFromBag: itemId={itemId}, quantity={quantity}");
             return false;
         }
 
-        slot.quantity -= quantity;
-        if (slot.quantity <= 0)
+        // Get all slots containing this item
+        var slotsWithItem = BagItems.Where(s => s.itemId == itemId).OrderBy(s => s.quantity).ToList();
+        
+        if (slotsWithItem.Count == 0)
         {
-            BagItems.Remove(slot);
-            Debug.Log($"Removed item slot for ID: {itemId} from bag (quantity reached 0)");
+            Debug.Log($"Cannot remove item from bag, no slots found for ID: {itemId}");
+            return false;
         }
-        else
+
+        // Check if we have enough total quantity
+        int totalQuantity = slotsWithItem.Sum(s => s.quantity);
+        if (totalQuantity < quantity)
         {
-            Debug.Log($"Reduced quantity for item ID: {itemId} in bag. New quantity: {slot.quantity}");
+            Debug.Log($"Not enough items to remove. Requested {quantity}, have {totalQuantity} of item ID: {itemId}");
+            return false;
         }
+
+        int remainingToRemove = quantity;
+        
+        // Process each stack until we've removed enough items
+        foreach (var slot in slotsWithItem)
+        {
+            if (remainingToRemove <= 0) break;
+
+            int canRemoveFromStack = Math.Min(slot.quantity, remainingToRemove);
+            slot.quantity -= canRemoveFromStack;
+            remainingToRemove -= canRemoveFromStack;
+
+            if (slot.quantity <= 0)
+            {
+                BagItems.Remove(slot);
+            }
+        }
+
+        Debug.Log($"Removed {quantity}x of item ID: {itemId} from bag. Removed from {slotsWithItem.Count} stack(s).");
         return true;
     }
 

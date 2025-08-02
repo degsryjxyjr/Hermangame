@@ -143,6 +143,25 @@
         <!-- --- END --- -->
 
 
+        <!-- Shop View -->
+        <div id="shopView" class="view" style="display:none;">
+            <h1>Shop</h1>
+
+            <div id="shopMessageArea" class="message-area" style="display:none;"></div>
+
+            <div id="shopMainArea">
+                <div id="shopInventorySection">
+                    <h2>Shop Wares</h2>
+                    <div id="shopItemsContainer" class="items-container"></div>
+                </div>
+
+                <div id="playerInventorySection">
+                    <h2>Your Inventory</h2>
+                    <div id="playerItemsContainer" class="items-container"></div>
+                </div>
+            </div>
+        </div>
+
 
         <!-- Combat View Panel -->
         <div id="combatPanel">
@@ -237,6 +256,16 @@
             items: {} // itemId: quantity
         };
         // --- END ---
+
+        // --- Shop Specific Variables ---
+        let currentShopItems = []; // Stores the shop items data received from the server
+        let currentPlayerItems = []; // Stores the player items data for the shop view
+        // Shop DOM Elements
+        const shopView = document.getElementById('shopView');
+        const shopMessageArea = document.getElementById('shopMessageArea');
+        const shopItemsContainer = document.getElementById('shopItemsContainer');
+        const playerItemsContainer = document.getElementById('playerItemsContainer');
+
 
         /* ---- INVENTORY UI ---- */
         const inventoryButton = document.getElementById('inventoryButton');
@@ -347,7 +376,6 @@
             const bagItems = inventoryUpdateData.items || []; // Ensure it's an array
             const bagContainer = document.getElementById('inventoryItems');
             bagContainer.innerHTML = ''; // Clear existing items
-
             if (bagItems.length === 0) {
                 bagContainer.innerHTML = '<div class="empty-inventory">Your bag is empty</div>';
             } else {
@@ -364,6 +392,14 @@
             // --- IMPORTANT: Update the global inventoryData variable ---
             inventoryData = bagItems; // This is crucial for updateTradeInventoryDisplay
             // --- END IMPORTANT ---
+            
+            // Check if shop view is visible and update player items within it
+            if (shopView && shopView.style.display !== 'none') {
+                console.log("[Shop UI] Received inventory_update while shop is open. Updating player items section.");
+                // The handleInventoryData function has already updated the global inventoryData variable.
+                // Now, use that data to refresh the player items display specifically within the shop.
+                updateShopPlayerInventory();
+            }
 
             // --- Handle Equipped Items (NEW LOGIC) ---
             const equippedData = inventoryUpdateData.equipped || {}; // Ensure it's an object
@@ -863,12 +899,18 @@
                             
                             document.getElementById('lobbyView').style.display = 'none';
                             document.getElementById('gameView').style.display = 'block';
+
+                            // ensure mapView is shown when entering map
+                            document.getElementById('mapView').style.display = 'block';
                             
                             // Ensure inventory is hidden when game starts
                             document.getElementById('inventoryPanel').style.display = 'none';
 
                             // ensure tradeView is hidden when game starts
                             document.getElementById('tradeView').style.display = 'none';
+
+                            // ensure shopView is hidden when game starts
+                            document.getElementById('shopView').style.display = 'none';
 
                             // --- Update Map View Party Display ---
                             // When entering the map view, use the stored party data to populate the display
@@ -901,6 +943,10 @@
 
                         case "Combat":
                             enterCombatMode();
+                            break;
+
+                        case "Shop":
+                            showShopView();
                             break;
                     }
                     break;
@@ -1114,6 +1160,91 @@
                     }
                     break;
                 // --- END NEW ---
+
+                // --- SHOP RELATED MSGS ----
+                case 'shop_data':
+                    console.log("[Shop UI] Received shop_data:", msg);
+                    // Clear and populate shop items
+                    shopItemsContainer.innerHTML = '';
+                    currentShopItems = msg.items || []; // Store for reference if needed
+                    if (currentShopItems.length > 0) {
+                        currentShopItems.forEach(itemData => {
+                            const itemElement = createShopItemElement(itemData);
+                            shopItemsContainer.appendChild(itemElement);
+                        });
+                    } else {
+                        shopItemsContainer.innerHTML = '<p>The shop is currently out of stock.</p>';
+                    }
+
+                    // Clear and populate player items (request current inventory state)
+                    // We can request a full inventory update or use the last known state if available
+                    // For now, let's request an update to ensure we have the latest player items
+                    sendMessage({ type: "inventory", action: "get" });
+                    console.log("[Shop UI] Requested player inventory update after receiving shop_data.");
+                    break;
+
+                case 'shop_result':
+                    console.log("[Shop UI] Received shop_result:", msg);
+                    if (msg.success) {
+                        let message = "";
+                        if (msg.action === "buy") {
+                            message = `Successfully bought ${msg.quantity}x ${msg.item_name} for ${msg.total_cost} coins.`;
+                            // Remove the bought item from the shop UI (find by slot_index)
+                            const boughtSlotIndex = msg.slot_index;
+                            if (boughtSlotIndex !== undefined) {
+                                const itemToRemove = shopItemsContainer.querySelector(`.shop-item[data-slot-index="${boughtSlotIndex}"]`);
+                                if (itemToRemove) {
+                                    itemToRemove.remove();
+                                    console.log(`[Shop UI] Removed item from slot ${boughtSlotIndex} after successful purchase.`);
+                                }
+                            }
+                            // --- NEW: Refresh player inventory display ---
+                            // The player's inventory has changed (coins spent, new item received)
+                            // The server should send an inventory_update, but we can also refresh locally.
+                            // Calling updateShopPlayerInventory() relies on inventoryData being updated,
+                            // which happens via the inventory_update message handler or by requesting an update.
+                            // Let's request an update to be sure the data is fresh for the shop view.
+                            sendMessage({ type: "inventory", action: "get" });
+                            console.log("[Shop UI] Requested inventory update after successful purchase.");
+                            // --- END NEW ---
+                        } else if (msg.action === "sell") {
+                            message = `Successfully sold ${msg.quantity}x ${msg.item_id} for ${msg.total_value} coins.`;
+                            // --- NEW: Refresh player inventory display ---
+                            // The player's inventory has changed (item sold, coins gained)
+                            sendMessage({ type: "inventory", action: "get" });
+                            console.log("[Shop UI] Requested inventory update after successful sale.");
+                            // --- END NEW ---
+                            // Note: Updating the sold item in the UI (reducing quantity or removing)
+                            // is handled by the inventory_update message processing (see below)
+                            // or by the logic inside updateShopPlayerInventory if called directly.
+                        }
+                        showShopMessage(message, 'success');
+                    } else {
+                        // Handle failure
+                        const errorMessage = msg.message || "Shop transaction failed.";
+                        showShopMessage(errorMessage, 'error');
+                        console.warn("[Shop UI] Shop transaction failed:", errorMessage);
+                    }
+                    // Re-enable any disabled buttons if needed
+                    document.querySelectorAll('#shopItemsContainer .buy-button[disabled], #playerItemsContainer .sell-button[disabled]').forEach(btn => {
+                        btn.disabled = false;
+                        btn.textContent = btn.classList.contains('buy-button') ? 'Buy' : 'Sell';
+                    });
+                    break;
+
+                case 'shop_error':
+                    console.error("[Shop UI] Received shop_error:", msg);
+                    const errorMsg = msg.message || "An unknown error occurred in the shop.";
+                    showShopMessage(errorMsg, 'error');
+                    // Re-enable buttons
+                    document.querySelectorAll('#shopItemsContainer .buy-button[disabled], #playerItemsContainer .sell-button[disabled]').forEach(btn => {
+                        btn.disabled = false;
+                        btn.textContent = btn.classList.contains('buy-button') ? 'Buy' : 'Sell';
+                    });
+                    break;
+
+
+
                 default:
                     logDebug(`Unknown message type: ${msg.type}`);
             }
@@ -2188,6 +2319,198 @@
             }
         }
 
+        // Function to update the player's inventory display within the shop view
+        // using the global inventoryData variable.
+        function updateShopPlayerInventory() {
+            if (!playerItemsContainer) {
+                console.warn("[Shop UI] Player items container not found.");
+                return;
+            }
+
+            // Clear existing items
+            playerItemsContainer.innerHTML = '';
+
+            // Check if inventoryData exists and is an array
+            if (!inventoryData || !Array.isArray(inventoryData)) {
+                console.warn("[Shop UI] inventoryData is not available or not an array.");
+                playerItemsContainer.innerHTML = '<p>Inventory data not loaded.</p>';
+                return;
+            }
+
+            // Filter out items with quantity <= 0 (should ideally be handled by inventoryData update, but safe to check)
+            const validItems = inventoryData.filter(item => item && item.quantity > 0);
+
+            if (validItems.length === 0) {
+                playerItemsContainer.innerHTML = '<p>Your inventory is empty.</p>';
+                return;
+            }
+
+            // Iterate through valid items and create display elements using the helper
+            validItems.forEach(item => {
+                // Use the modified helper or a new specific one for shop player items
+                const itemElement = createPlayerShopItemElement(item);
+                playerItemsContainer.appendChild(itemElement);
+            });
+
+            console.log("[Shop UI] Player inventory section updated using inventoryData.");
+        }
+
+
+        // Function to create a shop item element based on the data from shop_data message
+        function createShopItemElement(shopItemData) {
+            // Use the existing helper to create the base structure
+            // Ensure shopItemData has the expected format {id, name, price, slot_index, quantity:1}
+            // The server sends price, so we can use it directly.
+            const baseItemElement = createInventoryItemElement({
+                id: shopItemData.id,
+                name: shopItemData.name,
+                icon: `images/icons/${shopItemData.id}`, // Assume standard path, helper handles fallback
+                quantity: 1 // Shop items are typically 1 per slot for purchase
+            });
+
+            // Add specific classes for styling
+            baseItemElement.classList.add('shop-item');
+            baseItemElement.classList.remove('inventory-item'); // Remove generic class if needed
+
+            // Add data attributes for interaction
+            baseItemElement.dataset.itemId = shopItemData.id;
+            baseItemElement.dataset.slotIndex = shopItemData.slot_index;
+            baseItemElement.dataset.itemPrice = shopItemData.price;
+
+            // Create and add price display
+            const priceBadge = document.createElement('span');
+            priceBadge.className = 'item-price';
+            priceBadge.textContent = `${shopItemData.price}c`; // 'c' for coins
+            baseItemElement.appendChild(priceBadge);
+
+            // Create and add Buy button
+            const buyButton = document.createElement('button');
+            buyButton.className = 'buy-button';
+            buyButton.textContent = 'Buy';
+            buyButton.addEventListener('click', function() {
+                // Send buy message
+                sendMessage({
+                    type: "shop_action",
+                    action: "buy",
+                    item_id: shopItemData.id,
+                    quantity: 1 // Default to 1 for UI click
+                });
+                console.log(`[Shop UI] Sent buy request for ${shopItemData.name} (${shopItemData.id})`);
+                // Optional: Disable button or show pending state
+                buyButton.disabled = true;
+                buyButton.textContent = '...';
+            });
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'item-actions';
+            actionsDiv.appendChild(buyButton);
+            baseItemElement.appendChild(actionsDiv);
+
+            return baseItemElement;
+        }
+
+        // Function to create a player item element for selling in the shop view
+        function createPlayerShopItemElement(playerItemData) {
+            // Use the existing helper
+            const baseItemElement = createInventoryItemElement(playerItemData); // {id, name, icon, quantity}
+
+            // Add specific classes for styling
+            baseItemElement.classList.add('player-item');
+            baseItemElement.classList.remove('inventory-item'); // Remove generic class if needed
+
+            // Add data attributes
+            baseItemElement.dataset.itemId = playerItemData.id;
+            // Quantity is already in playerItemData.quantity
+
+            // Calculate sell price (mimic server logic: half base price)
+            // This is a client-side display estimate. Server uses actual modified buy price / 2 logic.
+            // We don't have base price here easily, so we'll omit sell price display for now,
+            // or assume it's handled by a more complex item definition fetch if needed.
+            // For simplicity, just add the Sell button.
+
+            // Create and add Sell button
+            const sellButton = document.createElement('button');
+            sellButton.className = 'sell-button';
+            // Example: Show estimated sell price if you can fetch it or calculate it
+            // sellButton.textContent = `Sell (${Math.max(1, Math.floor(playerItemData.basePrice / 2))}c)`;
+            sellButton.textContent = 'Sell';
+            sellButton.addEventListener('click', function() {
+                const quantityToSell = 1; // Default to 1, could be made configurable
+                if (quantityToSell > 0 && quantityToSell <= playerItemData.quantity) {
+                    sendMessage({
+                        type: "shop_action",
+                        action: "sell",
+                        item_id: playerItemData.id,
+                        quantity: quantityToSell
+                    });
+                    console.log(`[Shop UI] Sent sell request for ${quantityToSell}x ${playerItemData.name} (${playerItemData.id})`);
+                    // Optional: Disable button or show pending state
+                    sellButton.disabled = true;
+                    sellButton.textContent = '...';
+                } else {
+                    showShopMessage(`Invalid quantity to sell for ${playerItemData.name}`, 'error');
+                }
+            });
+
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'item-actions';
+            actionsDiv.appendChild(sellButton);
+            baseItemElement.appendChild(actionsDiv);
+
+            return baseItemElement;
+        }
+
+        // Function to display messages in the shop message area
+        function showShopMessage(message, type = 'info') {
+            shopMessageArea.textContent = message;
+            shopMessageArea.className = 'message-area'; // Reset classes
+            if (type === 'success' || type === 'error') {
+                shopMessageArea.classList.add(type);
+            }
+            shopMessageArea.style.display = 'block';
+            // Optional: Auto-hide message after a few seconds
+            setTimeout(() => { shopMessageArea.style.display = 'none'; }, 5000);
+        }
+
+        // Function to clear shop messages
+        function clearShopMessage() {
+            shopMessageArea.style.display = 'none';
+        }
+
+        // --- Main Shop UI Functions ---
+
+        // Function to show the shop view and request initial data
+        function showShopView() {
+            console.log("[Shop UI] Showing shop view.");
+
+            // Ensure inventory is hidden
+            document.getElementById('inventoryPanel').style.display = 'none';
+
+            // ensure tradeView is hidden
+            document.getElementById('tradeView').style.display = 'none';
+
+            // ensure mapView is hidden
+            mapView.style.display = 'none'; // Hide map view 
+
+            shopView.style.display = 'block';
+            clearShopMessage();
+            // Clear previous items
+            shopItemsContainer.innerHTML = '';
+            playerItemsContainer.innerHTML = '';
+            // Request shop data from the server
+            sendMessage({ type: "shop_action", action: "view" });
+            console.log("[Shop UI] Sent 'view' request to server.");
+        }
+
+        // Function to hide the shop view
+        function hideShopView() {
+            console.log("[Shop UI] Hiding shop view.");
+            shopView.style.display = 'none';
+            // Clear state
+            currentShopItems = [];
+            currentPlayerItems = [];
+            clearShopMessage();
+        }
 
         function updatePlayerList(players) {
             const listElement = document.getElementById('playerList');

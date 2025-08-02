@@ -415,6 +415,15 @@ public class PlayerManager : MonoBehaviour
                     }
                     _combat.HandleMessage(connection, msg);
                     break;
+
+                case GameStateManager.GameState.Shop:
+                    if (ShopService.Instance == null)
+                    {
+                        Debug.LogError("ShopService reference is null");
+                        return;
+                    }
+                    ShopService.Instance.HandleMessage(connection, msg);
+                    break;
                     
                 default:
                     Debug.LogWarning($"Unhandled game state: {GameStateManager.Instance.CurrentState}");
