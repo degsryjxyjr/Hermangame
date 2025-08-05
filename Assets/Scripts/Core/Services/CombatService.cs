@@ -12,6 +12,17 @@ public class CombatService : MonoBehaviour
     public bool IsInCombat => _isInCombat;
     // - End Basic Combat State -
 
+    [Header("Enemy Loot")]
+    [SerializeField] private List<LootTable> _allEncounterLootTables = new List<LootTable>();
+    [SerializeField] private string _coinItemId = "Coin"; // ID of your coin ItemDefinition
+    [SerializeField] private string _lootTablesResourcePath = "LootTables/Encounter"; // Path under Resources folder
+
+    [Header("Enemy Spawning")]
+    [SerializeField] private string _enemySpawnTablesResourcePath = "EnemySpawnTables"; // Path under Resources folder for EnemySpawnTables
+    private List<EnemySpawnTable> _allEnemySpawnTables = new List<EnemySpawnTable>(); // Cache for loaded spawn tables
+
+
+
     // --- Reference to EncounterManager ---
     // This will be instantiated or found in the combat scene.
     private EncounterManager _encounterManager;
@@ -30,6 +41,19 @@ public class CombatService : MonoBehaviour
             return;
         }
         Instance = this;
+
+        // Load all loot tables from the specified Resources path
+        LootTable[] loadedTables = Resources.LoadAll<LootTable>(_lootTablesResourcePath);
+        _allEncounterLootTables = new List<LootTable>(loadedTables);
+        Debug.Log($"CombatService: Loaded {_allEncounterLootTables.Count} loot tables from Resources/{_lootTablesResourcePath}");
+
+        // --- NEW: Load all enemy spawn tables ---
+        EnemySpawnTable[] loadedSpawnTables = Resources.LoadAll<EnemySpawnTable>(_enemySpawnTablesResourcePath);
+        _allEnemySpawnTables = new List<EnemySpawnTable>(loadedSpawnTables);
+        Debug.Log($"CombatService: Loaded {_allEnemySpawnTables.Count} enemy spawn tables from Resources/{_enemySpawnTablesResourcePath}");
+        // --- END NEW ---
+
+
         // Don't DontDestroyOnLoad if it's scene-specific. Otherwise, do.
         // For this example, let's assume it's scene-specific and managed by GameStateManager.
         // DontDestroyOnLoad(gameObject); 
@@ -81,12 +105,226 @@ public class CombatService : MonoBehaviour
     }
 
 
+    // --- InitializeForRandomEncounter ---
+    /// <summary>
+    /// Initializes the combat service for a random encounter.
+    /// Selects enemies and loot based on party level using EnemySpawnTables and LootTables.
+    /// </summary>
+    public void InitializeForRandomEncounter(Party party)
+    {
+        if (party == null)
+        {
+            Debug.LogError("CombatService: Cannot initialize random encounter, party is null.");
+            return;
+        }
+
+        Debug.Log("CombatService: Initializing for new RANDOM encounter.");
+
+        // 1. Get party level (used for filtering tables)
+        int currentLevel = party.Level;
+        Debug.Log($"CombatService: Party level for encounter generation is {currentLevel}.");
+
+        // 2. Determine applicable loot tables and enemy spawn tables
+        List<LootTable> applicableLootTables = DetermineApplicableLootTables(currentLevel);
+        List<EnemySpawnTable> applicableEnemySpawnTables = DetermineApplicableEnemySpawnTables(currentLevel);
+
+        Debug.Log($"CombatService: Applicable Loot Tables: {applicableLootTables.Count}. Applicable Enemy Spawn Tables: {applicableEnemySpawnTables.Count}.");
+
+        // 3. Select loot items for the encounter's reward pool
+        List<ItemDefinition> selectedLoot = new List<ItemDefinition>();
+        System.Random rng = new System.Random();
+
+        if (applicableLootTables != null && applicableLootTables.Count > 0)
+        {
+            // Combine items from all applicable loot tables for selection
+            List<ItemDefinition> allPossibleLootItems = new List<ItemDefinition>();
+            foreach (var table in applicableLootTables)
+            {
+                allPossibleLootItems.AddRange(table.Entries);
+            }
+
+            if (allPossibleLootItems.Count > 0)
+            {
+                // Decide how many loot items to potentially drop (e.g., 1-3)
+                int numberOfLootItemsToSelect = rng.Next(1, 4); // 1, 2, or 3
+
+                // Simple selection: Pick a few random items from the combined list
+                // Shuffle and take the first N
+                Shuffle(allPossibleLootItems, rng); // You might need to implement Shuffle (see below)
+                int itemsToTake = Mathf.Min(numberOfLootItemsToSelect, allPossibleLootItems.Count);
+                selectedLoot.AddRange(allPossibleLootItems.GetRange(0, itemsToTake));
+
+                Debug.Log($"CombatService: Selected {selectedLoot.Count} potential loot items for the encounter.");
+            }
+            else
+            {
+                Debug.Log("CombatService: No valid items found in applicable loot tables.");
+            }
+        }
+        else
+        {
+            Debug.Log("CombatService: No applicable loot tables found for party level.");
+        }
+
+        // 4. Select enemies for the encounter
+        List<EnemyDefinition> selectedEnemies = new List<EnemyDefinition>();
+
+        if (applicableEnemySpawnTables != null && applicableEnemySpawnTables.Count > 0)
+        {
+            // Collect all possible enemy entries from applicable tables
+            List<EnemySpawnTable.EnemyEntry> allPossibleEnemyEntries = new List<EnemySpawnTable.EnemyEntry>();
+            foreach (var table in applicableEnemySpawnTables)
+            {
+                allPossibleEnemyEntries.AddRange(table.Entries);
+            }
+
+            if (allPossibleEnemyEntries.Count > 0)
+            {
+                // Decide encounter size (e.g., 1-3 enemies, adjust as needed)
+                // This could also be based on party size or level later
+                int totalEnemiesToSpawn = rng.Next(1, 4); // 1, 2, or 3
+                int enemiesSpawnedSoFar = 0;
+
+                // Shuffle the entries for randomness in selection order
+                Shuffle(allPossibleEnemyEntries, rng);
+
+                // Attempt to fill the encounter slots using weighted random selection
+                while (enemiesSpawnedSoFar < totalEnemiesToSpawn && allPossibleEnemyEntries.Count > 0)
+                {
+                    // Find the maximum weight among remaining entries for normalization
+                    float maxWeight = allPossibleEnemyEntries.Max(e => e.weight);
+                    if (maxWeight <= 0) maxWeight = 1.0f;
+
+                    bool enemyAddedThisCycle = false;
+                    // Iterate through shuffled list to find an enemy to spawn
+                    for (int i = allPossibleEnemyEntries.Count - 1; i >= 0; i--) // Iterate backwards to allow safe removal
+                    {
+                        var entry = allPossibleEnemyEntries[i];
+                        if (entry.enemy == null) continue;
+
+                        // Weighted random check
+                        float normalizedWeight = entry.weight / maxWeight;
+                        float roll = (float)rng.NextDouble(); // 0.0f to 1.0f
+
+                        if (roll < normalizedWeight)
+                        {
+                            // Select quantity for this enemy type
+                            int quantity = rng.Next(entry.minQuantity, entry.maxQuantity + 1);
+                            if (quantity > 0)
+                            {
+                                // Add the enemy definition 'quantity' times
+                                for (int j = 0; j < quantity; j++)
+                                {
+                                    if (enemiesSpawnedSoFar < totalEnemiesToSpawn)
+                                    {
+                                        selectedEnemies.Add(entry.enemy);
+                                        enemiesSpawnedSoFar++;
+                                        enemyAddedThisCycle = true;
+                                    }
+                                    else
+                                    {
+                                        break; // Encounter is full
+                                    }
+                                }
+                                // Remove the entry so it's not selected again in this encounter generation cycle
+                                allPossibleEnemyEntries.RemoveAt(i);
+                            }
+                            // Break inner loop after successful spawn attempt to restart weighting check
+                            break;
+                        }
+                    }
+
+                    // If no enemy was added this cycle, maybe lower the bar or pick one anyway?
+                    // For now, if nothing was added and we still have slots, we'll try again.
+                    // If the list is empty or we keep failing, the loop will eventually exit.
+                    // You could add a fallback here if needed (e.g., pick a random remaining one).
+                    if (!enemyAddedThisCycle && enemiesSpawnedSoFar < totalEnemiesToSpawn)
+                    {
+                         // Optional: Fallback logic if weighted selection fails repeatedly
+                         // For simplicity, if list isn't empty, pick the first one.
+                         if (allPossibleEnemyEntries.Count > 0 && allPossibleEnemyEntries[0].enemy != null)
+                         {
+                             selectedEnemies.Add(allPossibleEnemyEntries[0].enemy);
+                             enemiesSpawnedSoFar++;
+                             allPossibleEnemyEntries.RemoveAt(0); // Remove to prevent infinite loop
+                             Debug.Log("CombatService: Used fallback to select an enemy.");
+                         }
+                    }
+                }
+
+                Debug.Log($"CombatService: Selected {selectedEnemies.Count} enemies for the encounter.");
+            }
+            else
+            {
+                Debug.LogWarning("CombatService: No valid enemy entries found in applicable spawn tables.");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("CombatService: No applicable enemy spawn tables found for party level.");
+        }
+
+        // 5. Validate selections
+        if (selectedEnemies.Count == 0)
+        {
+            Debug.LogError("CombatService: Failed to select any enemies for the random encounter!");
+            // Handle error - maybe spawn a default weak enemy?
+            // For now, let's abort
+            return;
+        }
+
+        // Proceed with initialization using InitializeForEncounter and selected enemies and loot
+
+        // Call the main initialization method with the selected data
+        // Pass the party, the list of selected enemy definitions, and the selected loot table
+        _encounterManager.StartEncounter(party, selectedEnemies, selectedLoot);
+        Debug.Log("CombatService: Random encounter initialization completed and passed to EncounterManager.");
+    }
+
+
+    // --- Helper Method (Add if not already present) ---
+    /// <summary>
+    /// Shuffles a list in place using the Fisher-Yates algorithm.
+    /// </summary>
+    private void Shuffle<T>(List<T> list, System.Random rng)
+    {
+        // System.Random rng = new System.Random(); // Passed in for consistency
+        int n = list.Count;
+        while (n > 1)
+        {
+            n--;
+            int k = rng.Next(n + 1);
+            T value = list[k];
+            list[k] = list[n];
+            list[n] = value;
+        }
+    }
+
+    // Determine which loot tables are applicable based on the current party level
+    private List<LootTable> DetermineApplicableLootTables(int currentPartyLevel)
+    {
+        return _allEncounterLootTables.Where(table => table.minLevelRequirement <= currentPartyLevel).ToList();
+    }
+    
+
+    // --- Determine applicable Enemy Spawn Tables ---
+    /// <summary>
+    /// Determines which enemy spawn tables are applicable based on the current party level.
+    /// </summary>
+    private List<EnemySpawnTable> DetermineApplicableEnemySpawnTables(int currentPartyLevel)
+    {
+        // Filter spawn tables based on their minLevelRequirement
+        return _allEnemySpawnTables.Where(table => table.minLevelRequirement <= currentPartyLevel).ToList();
+    }
+    // --- END NEW ---
+
+
     // --- EncounterManager Event Handlers with Server Messages ---
 
     private void OnEncounterStarted_Internal()
     {
         Debug.Log("CombatService: Received OnEncounterStarted from EncounterManager.");
-        
+
         if (_encounterManager == null)
         {
             Debug.LogError("CombatService: OnEncounterStarted_Internal called but _encounterManager is null!");

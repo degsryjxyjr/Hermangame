@@ -262,7 +262,7 @@ public class ShopService : MonoBehaviour
 
     [Header("Configuration")]
     [SerializeField] private string _coinItemId = "Coin"; // ID of your coin ItemDefinition
-    [SerializeField] private string _lootTablesResourcePath = "LootTables"; // Path under Resources folder
+    [SerializeField] private string _lootTablesResourcePath = "LootTables/Shop"; // Path under Resources folder
     [SerializeField] private int _maxShopItems = 8; // Easily configurable number of shop slots
     [SerializeField] private int _baseShopMoney = 100; // Configurable base amount
     [SerializeField] private int _shopMoney ; // Actual number of coins the shop has(relevant when players want to sell items)
