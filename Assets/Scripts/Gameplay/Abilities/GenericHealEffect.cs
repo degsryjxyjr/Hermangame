@@ -77,11 +77,11 @@ public class GenericHealEffect : MonoBehaviour, IAbilityEffect
         // Example: Scale healing with caster's magic stat if available
         if (caster is PlayerConnection player)
         {
-            finalHeal += Mathf.FloorToInt(player.Magic * abilityDefinition.healingScaling);
+            finalHeal += Mathf.FloorToInt(player.Magic * abilityDefinition.magicScaling);
         }
         else if (caster is EnemyEntity enemy)
         {
-            finalHeal += Mathf.FloorToInt(enemy.Magic * abilityDefinition.healingScaling);
+            finalHeal += Mathf.FloorToInt(enemy.Magic * abilityDefinition.magicScaling);
         }
 
         return Mathf.Max(1, finalHeal); // Ensure minimum 1 heal

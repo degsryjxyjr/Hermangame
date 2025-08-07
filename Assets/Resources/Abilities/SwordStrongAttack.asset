@@ -21,8 +21,8 @@ MonoBehaviour:
   radius: 0
   baseEffectValue: 35
   damageType: 0
-  attackScaling: 0
-  healingScaling: 0
+  attackScaling: 0.15
+  magicScaling: 0
   effectLogicSource: {fileID: 5272473619623566952, guid: 3c1c5488a63fe77488388b267d346718, type: 3}
   effectPrefab: {fileID: 0}
   animationTrigger: 

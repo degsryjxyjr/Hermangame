@@ -59,9 +59,9 @@ public class AbilityDefinition : ScriptableObject
     [Range(0f, 2f)]
     public float attackScaling = 0f;
     
-    [Tooltip("Percentage of caster's Magic stat added to healing (0.5 = 50% of Magic added)")]
+    [Tooltip("Percentage of caster's Magic stat added to damage (0.5 = 50% of Magic added)")]
     [Range(0f, 2f)]
-    public float healingScaling = 0f;
+    public float magicScaling = 0f;
     #endregion
 
     #region Effect Logic

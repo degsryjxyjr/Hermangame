@@ -19,10 +19,10 @@ MonoBehaviour:
   supportedTargetTypes: 02000000
   range: 5
   radius: 5
-  baseEffectValue: 50
+  baseEffectValue: 40
   damageType: 1
   attackScaling: 0
-  healingScaling: 0
+  magicScaling: 0.15
   effectLogicSource: {fileID: 5272473619623566952, guid: 3c1c5488a63fe77488388b267d346718, type: 3}
   effectPrefab: {fileID: 7235997375035445226, guid: cfd0a8e7ca1bca647820c2d22d83924c, type: 3}
   animationTrigger: 

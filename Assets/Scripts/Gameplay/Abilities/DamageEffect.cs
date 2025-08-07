@@ -74,20 +74,40 @@ public class DamageEffect : MonoBehaviour, IAbilityEffect
 
     private int CalculateFinalDamage(IEntity caster, IDamageable target, int baseDamage, AbilityDefinition abilityDefinition)
     {
-        // Basic damage calculation - can be expanded with stat modifiers
+        // Store original damage for debugging
+        int originalDamage = baseDamage;
         int finalDamage = baseDamage;
 
-        // Example: Scale damage with caster's attack stat if available
-        if (caster is PlayerConnection player)
+        if (abilityDefinition.attackScaling != 0f)
         {
-            finalDamage += Mathf.FloorToInt(player.Attack * abilityDefinition.attackScaling);
+            // Scale damage with caster's attack stat if available
+            if (caster is PlayerConnection player)
+            {
+                finalDamage += Mathf.FloorToInt(player.Attack * abilityDefinition.attackScaling);
+            }
+            else if (caster is EnemyEntity enemy)
+            {
+                finalDamage += Mathf.FloorToInt(enemy.Attack * abilityDefinition.attackScaling);
+            }
         }
-        else if (caster is EnemyEntity enemy)
+        if (abilityDefinition.magicScaling != 0f)
         {
-            finalDamage += Mathf.FloorToInt(enemy.Attack * abilityDefinition.attackScaling);
+            // Scale damage with caster's magic stat if available
+            if (caster is PlayerConnection player)
+            {
+                finalDamage += Mathf.FloorToInt(player.Magic * abilityDefinition.magicScaling);
+            }
+            else if (caster is EnemyEntity enemy)
+            {
+                finalDamage += Mathf.FloorToInt(enemy.Magic * abilityDefinition.magicScaling);
+            }
         }
+        finalDamage = Mathf.Max(1, finalDamage); // Ensure minimum 1 damage
+        
+        // Debug final calculation
+        Debug.Log($"DamageEffect: Final damage calculated: {finalDamage} (Base: {originalDamage} + Modifiers: {finalDamage - originalDamage})");
 
-        return Mathf.Max(1, finalDamage); // Ensure minimum 1 damage
+        return finalDamage;
     }
 
     private void SendCombatMessage(PlayerConnection caster, List<string> targetNames, AbilityDefinition abilityDefinition)
