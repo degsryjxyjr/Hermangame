@@ -28,6 +28,8 @@ public class ItemDefinition : ScriptableObject
     public int healthModifier;
 
     [Header("These are true modifiers")]
+
+    public int maxHealthModifier;
     public int attackModifier;
     public int defenseModifier;
     public int magicModifier;
@@ -95,5 +97,24 @@ public class ItemDefinition : ScriptableObject
         {
             Debug.LogWarning($"ItemDefinition '{name}' is not Equipment but has EquipSlot '{equipSlot}'. This might be an error.", this);
         }
+        // validation for equipment effects
+        if (itemType == ItemType.Equipment)
+    {
+        bool hasModifiers = maxHealthModifier != 0 || attackModifier != 0 || 
+                           defenseModifier != 0 || magicModifier != 0 || 
+                           actionModifier != 0;
+        
+        bool hasEffects = equipmentEffectSources != null && 
+                         equipmentEffectSources.Count > 0 && 
+                         equipmentEffectSources.Any(x => x != null);
+
+        if (hasModifiers && !hasEffects)
+        {
+            Debug.LogWarning($"Equipment item '{name}' has stat modifiers but no EquipmentEffectSource. " +
+                            "These modifiers won't affect player stats unless an EquipmentEffectSource is added.", this);
+        }
+        
+    }
+
     }
 }

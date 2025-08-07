@@ -103,7 +103,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 684c7ba382c749348817f1967f80b413, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _enemyDefinition: {fileID: 11400000, guid: feef605e4fb57b14f8dbb340a4d1f420, type: 2}
+  _enemyDefinition: {fileID: 11400000, guid: b7b46fb5966054c40918a0c40dd9e3f9, type: 2}
   _level: 1
   _encounterManager: {fileID: 0}
 --- !u!222 &-244344584552536551

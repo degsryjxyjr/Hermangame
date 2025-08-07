@@ -20,6 +20,7 @@ MonoBehaviour:
   isStackable: 0
   maxStack: 1
   healthModifier: 0
+  maxHealthModifier: 0
   attackModifier: 0
   defenseModifier: 15
   magicModifier: -1

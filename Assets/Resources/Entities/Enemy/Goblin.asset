@@ -20,7 +20,7 @@ MonoBehaviour:
   baseAttack: 5
   baseDefense: 1
   baseMagic: 0
-  baseActions: 1
+  baseActions: 2
   healthGrowth:
     serializedVersion: 2
     m_Curve:

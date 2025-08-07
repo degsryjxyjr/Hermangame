@@ -15,13 +15,45 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
 
     [Header("Runtime State")]
     // These could potentially be in a separate RuntimeStats class like PlayerConnection, but simpler here for now.
-    public int CurrentHealth { get; private set; }
-    public int MaxHealth { get; private set; }
-    public int Attack { get; private set; }
-    public int Defense { get; private set; }
-    public int Magic { get; private set; }
+    public int CurrentHealth { get; set; }
+    public int MaxHealth { get; set; }
+    public int Attack { get; set; }
+    public int Defense { get; set; }
+    public int Magic { get; set; }
 
     public int XpOnDefeat { get; private set; }
+
+    // --- Action Budget Field ---
+    // Base action count (from ClassDefinition)
+    public int BaseActions { get; set; } = 1; // Default
+
+    // Current turn's action counts (can be modified by effects)
+    public int TotalActions { get; set; } = 1;
+
+    // Remaining actions for the current turn
+    public int ActionsRemaining { get; set; } = 1;
+    // --- END Action Budget Fields ---
+
+    
+    // Reference to the list of abilities this enemy instance can use
+    public List<AbilityDefinition> UnlockedAbilities { get; set; } = new List<AbilityDefinition>();
+
+    // Reference to the list of items/equipment this enemy instance has
+    // For simplicity, let's assume a basic inventory or just starting equipment applied to stats
+    // A full inventory system for enemies is complex. For now, equipment modifies stats.
+    // You could have a simplified EnemyInventory if needed later.
+
+    // --- Reference to EncounterManager ---
+    // This allows the enemy to notify the manager of its death.
+    // The EncounterManager can set this when spawning the enemy.
+
+    [SerializeField] private EncounterManager _encounterManager; // Changed from public property to serialized field
+
+    public EncounterManager EncounterManager {
+        get => _encounterManager;
+        set => _encounterManager = value;
+    }
+
 
     //  Method to generate loot list based on the definition's table
     // This centralizes the loot roll logic within the EnemyEntity
@@ -47,36 +79,7 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
     }
     // --- END NEW ---
 
-    // --- Action Budget Field ---
-    // Base action count (from ClassDefinition)
-    public int BaseActions { get; private set; } = 1; // Default
 
-    // Current turn's action counts (can be modified by effects)
-    public int TotalActions { get; private set; } = 1;
-
-    // Remaining actions for the current turn
-    public int ActionsRemaining { get; private set; } = 1;
-    // --- END Action Budget Fields ---
-
-    
-    // Reference to the list of abilities this enemy instance can use
-    public List<AbilityDefinition> UnlockedAbilities { get; private set; } = new List<AbilityDefinition>();
-
-    // Reference to the list of items/equipment this enemy instance has
-    // For simplicity, let's assume a basic inventory or just starting equipment applied to stats
-    // A full inventory system for enemies is complex. For now, equipment modifies stats.
-    // You could have a simplified EnemyInventory if needed later.
-
-    // --- Reference to EncounterManager ---
-    // This allows the enemy to notify the manager of its death.
-    // The EncounterManager can set this when spawning the enemy.
-
-    [SerializeField] private EncounterManager _encounterManager; // Changed from public property to serialized field
-
-    public EncounterManager EncounterManager {
-        get => _encounterManager;
-        set => _encounterManager = value;
-    }
     
     /// <summary>
     /// Sets the enemy definition and level, then initializes stats
@@ -109,6 +112,7 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
     /// </summary>
     public void InitializeFromDefinition(int level)
     {
+        _level = level;
         // Calculate stats based on definition and level
         MaxHealth = Mathf.FloorToInt(_enemyDefinition.baseHealth * _enemyDefinition.healthGrowth.Evaluate(level));
         CurrentHealth = MaxHealth; // Start at full health
@@ -135,17 +139,50 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
         {
             if (equipItem != null && equipItem.itemType == ItemDefinition.ItemType.Equipment)
             {
-                // Directly apply stat bonuses from starting equipment
-                Attack += equipItem.attackModifier;
-                Defense += equipItem.defenseModifier;
-                Magic += equipItem.magicModifier;
-                // MaxHealth += equipItem.healthModifier; // If you use health modifier on equipment
+                OnEquipItem(equipItem);
                 Debug.Log($"Applied starting equipment {equipItem.displayName} bonuses to {_enemyDefinition.displayName}");
             }
         }
 
         Debug.Log($"Initialized Enemy {_enemyDefinition.displayName} (Level {level}): " +
                   $"HP {CurrentHealth}/{MaxHealth}, ATK {Attack}, DEF {Defense}, MAG {Magic}");
+    }
+
+    public void OnEquipItem(ItemDefinition equippedItem)
+    {
+        if (equippedItem == null)
+        {
+            Debug.LogWarning("EnemyEntity.OnEquipItem: Attempted to equip a null item.");
+            return;
+        }
+
+        Debug.Log($"EnemyEntity.OnEquipItem: Equipping item '{equippedItem.displayName}' for entity '{_enemyDefinition.displayName}'.");
+
+        // Get the list of IEquipmentEffect scripts
+        List<IEquipmentEffect> effects = equippedItem.GetEquipmentEffects();
+
+        if (effects.Count > 0)
+        {
+            // Apply each effect
+            foreach (var effect in effects)
+            {
+                effect.ApplyEffect(this, equippedItem);
+                Debug.Log($"Applied equipment effect '{effect.GetType().Name}' from {equippedItem.displayName}.");
+            }
+        }
+        // Note: Individual effect scripts should handle sending stats_update if needed.
+
+        // --- Handle Abilities Granted by Item ---
+        if (equippedItem.linkedAbilities != null && equippedItem.linkedAbilities.Count > 0)
+        {
+            foreach (var ability in equippedItem.linkedAbilities)
+            {
+                if (ability != null)
+                {
+                    UnlockedAbilities.Add(ability);
+                }
+            }
+        }
     }
 
     // --- Implementation of IEntity ---

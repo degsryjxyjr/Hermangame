@@ -156,28 +156,34 @@ public class GameStateManager : MonoBehaviour
                 {
                     // --- CLEANED UP: Prepare encounter data ---
                     // List<PlayerConnection> playersForEncounter = playersInCombat;
-                    List<EnemyDefinition> enemiesForEncounter = new List<EnemyDefinition>();
-                    // setting the lootTable
-                    List<ItemDefinition> lootTable = new List<ItemDefinition>();
 
-                    lootTable.Add(Resources.Load<ItemDefinition>("Items/ActionRing"));
+                    //List<EnemyDefinition> enemiesForEncounter = new List<EnemyDefinition>();
+
+                    // setting the lootTable
+                    //List<ItemDefinition> lootTable = new List<ItemDefinition>();
+
+                    //lootTable.Add(Resources.Load<ItemDefinition>("Items/ActionRing"));
                     // Load the test enemy
-                    EnemyDefinition goblinDef = Resources.Load<EnemyDefinition>("Entities/Enemy/Rat");
-                    if (goblinDef != null)
-                    {
-                        enemiesForEncounter.Add(goblinDef);
-                        enemiesForEncounter.Add(goblinDef);
-                        Debug.Log("GameStateManager: Added Rat to test encounter.");
-                    }
-                    else
-                    {
-                        Debug.LogWarning("GameStateManager: Could not load 'Rat' EnemyDefinition for test encounter.");
-                    }
+                    //EnemyDefinition goblinDef = Resources.Load<EnemyDefinition>("Entities/Enemy/Rat");
+                    //if (goblinDef != null)
+                    //{
+                    //    enemiesForEncounter.Add(goblinDef);
+                    //    enemiesForEncounter.Add(goblinDef);
+                    //    Debug.Log("GameStateManager: Added Rat to test encounter.");
+                    //}
+                    //else
+                    //{
+                    //    Debug.LogWarning("GameStateManager: Could not load 'Rat' EnemyDefinition for test encounter.");
+                    //}
 
                     // Pass both player and enemy lists
                     // This will now run in the context of the CombatScene
-                    combatService.InitializeForEncounter(partyInCombat, enemiesForEncounter, lootTable);
+                    //combatService.InitializeForEncounter(partyInCombat, enemiesForEncounter, lootTable);
                     // --- END CLEANED UP ---
+
+
+                    //use init random encounter
+                    combatService.InitializeForRandomEncounter(partyInCombat);
                 }
                 else
                 {

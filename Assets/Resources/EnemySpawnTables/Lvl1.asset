@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5421f427868005941afb7ba27d414b2e, type: 3}
+  m_Name: Lvl1
+  m_EditorClassIdentifier: 
+  tableName: Level 1 enemies
+  minLevelRequirement: 1
+  entries:
+  - enemy: {fileID: 11400000, guid: b7b46fb5966054c40918a0c40dd9e3f9, type: 2}
+    minQuantity: 0
+    maxQuantity: 2
+    weight: 5
+  - enemy: {fileID: 11400000, guid: feef605e4fb57b14f8dbb340a4d1f420, type: 2}
+    minQuantity: 0
+    maxQuantity: 2
+    weight: 5

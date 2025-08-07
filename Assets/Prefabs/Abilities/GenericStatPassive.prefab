@@ -11,7 +11,7 @@ GameObject:
   - component: {fileID: 4821127198372979759}
   - component: {fileID: 6107078068120874513}
   m_Layer: 0
-  m_Name: GenericArmorPassive
+  m_Name: GenericStatPassive
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

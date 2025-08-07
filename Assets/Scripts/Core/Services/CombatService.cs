@@ -274,11 +274,15 @@ public class CombatService : MonoBehaviour
         }
 
         // Proceed with initialization using InitializeForEncounter and selected enemies and loot
+        InitializeForEncounter(party, selectedEnemies, selectedLoot);
 
         // Call the main initialization method with the selected data
         // Pass the party, the list of selected enemy definitions, and the selected loot table
-        _encounterManager.StartEncounter(party, selectedEnemies, selectedLoot);
-        Debug.Log("CombatService: Random encounter initialization completed and passed to EncounterManager.");
+
+        // call InitializeForEncounter instead so all other init is done!
+        //_encounterManager.StartEncounter(party, selectedEnemies, selectedLoot);
+
+        Debug.Log("CombatService: Random encounter initialization completed and passed to InitializeForEncounter().");
     }
 
 
@@ -620,54 +624,176 @@ public class CombatService : MonoBehaviour
     // --- End  EncounterManager Event Handlers ---
 
 
-
-
-
-    // --- Enemy AI Trigger ---
+    // - Enemy AI Trigger -
+    /// <summary>
+    /// Triggers the AI for an enemy entity. The enemy will attempt to take actions
+    /// until it runs out of actions or cannot find a valid action.
+    /// </summary>
+    /// <param name="enemy">The EnemyEntity whose AI is being triggered.</param>
     private void TriggerEnemyAI(EnemyEntity enemy)
     {
-        if (enemy == null) return;
-
-        Debug.Log($"CombatService: Triggering AI for enemy {enemy.GetEntityName()}.");
-
-        // 1. Ask the enemy to decide its action (simplified)
-        // In a real system, this might involve a more complex AI decision tree.
-        AbilityDefinition chosenAbility = enemy.GetRandomUsableCombatAbility();
-        IDamageable chosenTarget = null; // Simplified target selection
-
-        if (chosenAbility != null)
+        if (enemy == null)
         {
-            // 2. Select a target (simplified: random player)
-            var alivePlayers = _encounterManager.GetActivePlayers().FindAll(p => p.IsAlive());
-            if (alivePlayers.Count > 0)
-            {
-                chosenTarget = alivePlayers[Random.Range(0, alivePlayers.Count)];
-            }
+            // Log a warning if enemy is null, but don't error fatally as the entity might have been removed
+            Debug.LogWarning("CombatService: Attempted to trigger AI for a null enemy.");
+            // Even if enemy is null, we should still advance the turn to keep combat flowing
+            // However, AdvanceTurn() should handle null/defeated entities gracefully anyway.
+            // Let's just return, AdvanceTurn will be called by the main loop logic.
+            return;
         }
 
-        if (chosenAbility != null && chosenTarget != null)
+        if (!enemy.IsAlive())
         {
-            // 3. Execute the ability using AbilityExecutionService
-            List<IDamageable> targets = new List<IDamageable> { chosenTarget };
+             Debug.LogWarning($"CombatService: Attempted to trigger AI for defeated enemy {enemy.GetEntityName()}. Advancing turn.");
+             // If the enemy is somehow dead (maybe defeated by an AoE just before its turn),
+             // we should advance the turn immediately.
+             _encounterManager?.AdvanceTurn();
+             return;
+        }
 
-            Debug.Log($"CombatService: Enemy {enemy.GetEntityName()} chose to use {chosenAbility.abilityName} on THIS IS NOT IMPLEMENTED.");
+        Debug.Log($"CombatService: Triggering AI for enemy {enemy.GetEntityName()}. Actions available: {enemy.ActionsRemaining}.");
 
-            bool success = AbilityExecutionService.Instance.ExecuteAbility(enemy, targets, chosenAbility, AbilityExecutionService.AbilityContext.InCombat);
-            if (success)
+        // --- MODIFIED: Loop to handle multiple actions ---
+        // Continue taking actions while the enemy has actions remaining
+        while (enemy.ActionsRemaining > 0 && enemy.IsAlive()) // Check IsAlive() again in case previous action killed it
+        {
+            Debug.Log($"CombatService: Enemy {enemy.GetEntityName()} has {enemy.ActionsRemaining} actions remaining. Attempting action...");
+
+            // 1. Ask the enemy to decide its action (simplified)
+            // In a real system, this might involve a more complex AI decision tree.
+            AbilityDefinition chosenAbility = enemy.GetRandomUsableCombatAbility(); // This method checks action cost internally
+
+            // Check if the chosen ability is valid and affordable
+            if (chosenAbility == null)
             {
-                // Handle success (broadcast new target stats to all clients and advance turn)
-                SendCombatEntityUpdate();
-                _encounterManager.AdvanceTurn();
+                Debug.Log($"CombatService: Enemy {enemy.GetEntityName()} found no usable ability. Ending turn.");
+                break; // Exit loop if no ability found
             }
+
+            IDamageable chosenTarget = null; // Simplified target selection
+
+            //2. Select a target
+            if (chosenAbility != null)
+            {
+                // select a single player for target if abilitys targetTypeTypes allows
+                if (chosenAbility.CanTargetSingleEnemy())
+                {
+                    // select a target (simplified: random player)
+                    // Ensure we only target alive players
+                    var alivePlayers = _encounterManager.GetActivePlayers().FindAll(p => p != null && p.IsAlive());
+                    if (alivePlayers.Count > 0)
+                    {
+                        chosenTarget = alivePlayers[UnityEngine.Random.Range(0, alivePlayers.Count)];
+                    }
+                    else
+                    {
+                        // No alive targets left, end turn
+                        Debug.Log($"CombatService: Enemy {enemy.GetEntityName()} found no alive targets. Ending turn.");
+                        break;
+                    }
+                }
+                // if target can be self target self
+                else if (chosenAbility.CanTargetSelf())
+                {
+                    chosenTarget = enemy;
+                }
+
+                else
+                {
+                    // No allowed targets , end turn
+                    Debug.Log($"CombatService: Enemy {enemy.GetEntityName()} found no allowed targets for ability {chosenAbility.abilityName}. Ending turn.");
+                    break;
+                }
+
+            }
+
+            if (chosenAbility != null && chosenTarget != null)
+            {
+                // 3. Execute the ability using AbilityExecutionService
+                List<IDamageable> targets = new List<IDamageable> { chosenTarget };
+
+                // casting target as IEntity so we can get its name
+                string targetName = (chosenTarget as IEntity)?.GetEntityName() ?? "Unknown Enemy";
+                Debug.Log($"CombatService: Enemy {enemy.GetEntityName()} chose to use {chosenAbility.abilityName} on {targetName}.");
+
+                // Execute the ability. This should internally call EncounterManager.Instance.RecordActionUsed(chosenAbility.actionCost)
+                // if the ability is used successfully and is context is InCombat and isFromItem is false.
+                // If it's from an item, the item usage logic should handle RecordActionUsed.
+                // Let's assume standard ability execution for AI for now.
+                bool success = AbilityExecutionService.Instance.ExecuteAbility(
+                    enemy, 
+                    targets, 
+                    chosenAbility, 
+                    AbilityExecutionService.AbilityContext.InCombat,
+                    isFromItem: false // Assuming AI uses innate abilities, not items directly here
+                );
+
+                if (success)
+                {
+                    // Handle success
+                    // The EncounterManager should have already updated the enemy's ActionsRemaining via RecordActionUsed
+                    // inside AbilityExecutionService.ExecuteAbility -> ExecuteAbilityEffect -> RecordActionUsed.
+
+                    // Broadcast new target stats (and potentially caster stats if the ability affected them) to all clients immediately
+                    SendCombatEntityUpdate();
+
+                    // --- NEW: Small delay to visualize multiple actions (Optional but recommended for clarity) ---
+                    // Without a delay, actions might appear to happen instantly.
+                    // We can use a coroutine or a simple yield in editor, but in a standard Update loop,
+                    // we can't easily pause. A more robust solution involves a state machine or action queue.
+                    // For now, we'll rely on the loop and the fact that actions are processed sequentially.
+                    // Consider implementing a small visual delay on the client side if needed.
+                    // --- END NEW ---
+
+                    // The loop will now check ActionsRemaining again at the start of the next iteration.
+                    Debug.Log($"CombatService: Enemy {enemy.GetEntityName()} action successful. Actions remaining: {enemy.ActionsRemaining}.");
+                }
+                else
+                {
+                    // Handle failure (e.g., ability execution failed due to internal logic)
+                    // It's possible ActionsRemaining wasn't deducted. We should decide how to handle this.
+                    // Option 1: End turn (safer to prevent potential loops)
+                    // Option 2: Try again (risky)
+                    // Let's go with Option 1: End turn if action fails unexpectedly.
+                    Debug.LogWarning($"CombatService: Enemy {enemy.GetEntityName()}'s action {chosenAbility.abilityName} failed. Ending turn.");
+                    break; // Exit the action loop
+                }
+            }
+            else
+            {
+                // If no valid action/target found in this iteration
+                Debug.Log($"CombatService: Enemy {enemy.GetEntityName()} could not find a valid action/target in this iteration. Ending turn.");
+                break; // Exit the action loop
+            }
+        } // --- END MODIFIED WHILE LOOP ---
+
+        // --- NEW: Check final state before advancing turn ---
+        // After the loop, check why it ended:
+        if (!enemy.IsAlive())
+        {
+            Debug.Log($"CombatService: Enemy {enemy.GetEntityName()} was defeated during its turn.");
+            // Turn advancement might be handled by the defeat logic elsewhere, or we can advance here.
+            // Let's advance here to be explicit, though EncounterManager might handle it too.
+            // _encounterManager.AdvanceTurn(); // Maybe not needed if defeat logic handles it.
+        }
+        else if (enemy.ActionsRemaining <= 0)
+        {
+            Debug.Log($"CombatService: Enemy {enemy.GetEntityName()} has exhausted all actions.");
         }
         else
         {
-            Debug.Log($"CombatService: Enemy {enemy.GetEntityName()} has no valid action. Ending turn.");
-            // If no action, just advance the turn.
-            _encounterManager.AdvanceTurn();
+            Debug.Log($"CombatService: Enemy {enemy.GetEntityName()}'s turn ended without using all actions (e.g., no valid actions found).");
         }
+        // --- END NEW ---
+
+        // Regardless of how the loop ended (actions exhausted, no valid action, enemy defeated),
+        // advance the turn to the next entity in the order.
+        _encounterManager.AdvanceTurn();
     }
-    // --- End Enemy AI Trigger ---
+    // - End Enemy AI Trigger -
+
+
+
 
     // Helper function to broadcast encounter entity updates(player heals, enemy takes damage etc)
     public void SendCombatEntityUpdate(bool sendDataFromAllEntities = true)
@@ -756,7 +882,7 @@ public class CombatService : MonoBehaviour
                 }
             }
             combatEntityData["enemies"] = enemiesData;
-            
+
             // --- Send Entity Update Message to ALL Players in the Encounter ---
             GameServer.Instance.Broadcast(combatEntityData);
             Debug.Log($"CombatService: Broadcast 'combat_entities_update' message");

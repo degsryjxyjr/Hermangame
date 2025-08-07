@@ -121,6 +121,7 @@ MonoBehaviour:
   lootTable: []
   innateAbilities:
   - {fileID: 11400000, guid: 2a021f8ee1e8c644a96d96f44076d54d, type: 2}
+  - {fileID: 11400000, guid: e2ca85e47cf37814da14dd9ee4cbd0fe, type: 2}
   startingEquipment:
   - {fileID: 11400000, guid: 89a2956f9484fef4e96f861cfc34bc2c, type: 2}
   aiBehaviorType: BasicMelee

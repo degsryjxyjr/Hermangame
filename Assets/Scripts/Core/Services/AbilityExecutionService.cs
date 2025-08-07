@@ -209,6 +209,16 @@ public class AbilityExecutionService : MonoBehaviour
                 // broadcast entity update
                 CombatService.Instance.SendCombatEntityUpdate();
             }
+            // if ability was used by EnemyEntity we need to call RecordActionUsed
+            else if (caster is EnemyEntity)
+            {
+                // Record the action usage based on the actual ability cost.
+                EncounterManager.Instance.RecordActionUsed(abilityDefinition.actionCost);
+
+                // this is done in CombatService if ability use was a success
+                // broadcast entity update
+                //CombatService.Instance.SendCombatEntityUpdate();
+            }
         }
 
         return executedSuccessfully;
