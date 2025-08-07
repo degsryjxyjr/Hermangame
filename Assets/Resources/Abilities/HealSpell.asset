@@ -20,7 +20,7 @@ MonoBehaviour:
   range: 1
   radius: 0
   baseEffectValue: -35
-  damageType: 0
+  damageType: 1
   attackScaling: 0
   healingScaling: 0
   effectLogicSource: {fileID: 5272473619623566952, guid: 94cd515323c6d3e45b122d8e77b346ea, type: 3}

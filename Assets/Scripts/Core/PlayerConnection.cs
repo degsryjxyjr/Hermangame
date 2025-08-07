@@ -231,26 +231,63 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
     {
         if (amount <= 0 || !IsAlive())
         {
+            Debug.Log($"{this.LobbyData?.Name ?? "Unknown Player"}: TakeDamage called with amount {amount} or entity is dead. No damage taken.");
             return 0;
         }
 
+        int originalDamage = amount;
         int damageTaken = amount;
+        int totalMitigation = 0;
+
+        string entityName = this.GetEntityName();
 
         // --- Damage Type Specific Calculations ---
         switch (type)
         {
             case AbilityDefinition.DamageType.Physical:
-                // Example: Apply defense mitigation
-                damageTaken = Mathf.Max(1, damageTaken - Mathf.FloorToInt(this.Defense / 10f));
+                // Apply defense mitigation (primarily by Defense)
+                int physicalMitigation = Mathf.FloorToInt(this.Defense / 5f);
+                totalMitigation = physicalMitigation; // For physical, total is just defense mitigation
+                damageTaken = Mathf.Max(1, damageTaken - totalMitigation);
+                
+                // --- NEW: Log Physical Mitigation Details ---
+                Debug.Log($"{entityName} received {originalDamage} {type} damage.");
+                Debug.Log($"{entityName} Physical Mitigation: Defense ({this.Defense}) -> Reduced by {physicalMitigation}. Damage Taken: {damageTaken}.");
+                // --- END NEW ---
                 break;
+
             case AbilityDefinition.DamageType.Magic:
-                // Example: Placeholder for magic resistance
-                // damageTaken = Mathf.Max(1, damageTaken - Mathf.FloorToInt(this.MagicResistance / 10f));
+                // Apply magic mitigation (primarily by Magic, with a small contribution from Defense)
+                // --- MODIFIED: Calculate and log Magic Mitigation Details ---
+                int magicMitigation = Mathf.FloorToInt(this.Magic / 5f);
+                int defenseMitigationBonus = Mathf.FloorToInt((this.Defense / 5f) * 0.2f); // 20% of normal Defense mitigation
+                totalMitigation = magicMitigation + defenseMitigationBonus;
+                int preClampDamageTaken = damageTaken - totalMitigation; // Calculate before Mathf.Max(1, ...)
+                damageTaken = Mathf.Max(1, preClampDamageTaken); // Ensure at least 1 damage is taken
+
+                Debug.Log($"{entityName} received {originalDamage} {type} damage.");
+                Debug.Log($"{entityName} Magic Mitigation: Magic ({this.Magic})-> Reduced by {magicMitigation}. " +
+                        $"Defense Bonus ({this.Defense})-> Reduced by ~{defenseMitigationBonus}. " +
+                        $"Total Mitigation: {totalMitigation}. " +
+                        $"Pre-Clamp Damage: {preClampDamageTaken}. Final Damage Taken: {damageTaken}.");
+                // --- END MODIFIED ---
                 break;
-            // Add cases for other DamageTypes as needed
+
+            case AbilityDefinition.DamageType.Pure:
+                // Pure bypasses all resistance and directly damages entity
+                totalMitigation = 0; // No mitigation
+                // --- NEW: Log Pure Damage (no mitigation) ---
+                Debug.Log($"{entityName} took {originalDamage} {type} damage (No mitigation applied). Damage Taken: {damageTaken}.");
+                // --- END NEW ---
+                break;
+
             default:
-                // Default to physical calculation
-                damageTaken = Mathf.Max(1, damageTaken - Mathf.FloorToInt(this.Defense / 10f));
+                Debug.LogError($"Incorrect DamageType '{type}' given for damage to {entityName}! No damage was taken!");
+                // --- NEW: Log Error Case ---
+                Debug.Log($"{entityName} Default Case (Error): Original Damage: {originalDamage}, Damage Taken: 0.");
+                // --- END NEW ---
+                damageTaken = 0;
+                totalMitigation = 0; // No mitigation applied due to error
                 break;
         }
         // --- End Damage Type Calculations ---
@@ -259,7 +296,17 @@ public class PlayerConnection : IEntity, IDamageable, IHealable, IActionBudget
         this.CurrentHealth -= damageTaken;
         this.CurrentHealth = Mathf.Max(0, this.CurrentHealth); // Clamp to 0
 
-        Debug.Log($"{this.LobbyData.Name} took {damageTaken} {type} damage. HP: {this.CurrentHealth}/{this.MaxHealth}");
+        // --- MODIFIED/CONSOLIDATED: Final Damage Summary Log ---
+        // This replaces the previous simple log
+        if (type != AbilityDefinition.DamageType.Pure && damageTaken > 0) // Avoid redundant logs for Pure or 0 damage
+        {
+            Debug.Log($"{entityName} Final Damage Summary: Original: {originalDamage}, Mitigated: {totalMitigation}, Taken: {damageTaken}. HP now: {this.CurrentHealth}/{this.MaxHealth}");
+        }
+        else if (damageTaken > 0) // Pure damage or cases where damage was taken
+        {
+            Debug.Log($"{entityName} Final Damage Summary: Original: {originalDamage}, Mitigated: {totalMitigation}, Taken: {damageTaken}. HP now: {this.CurrentHealth}/{this.MaxHealth}");
+        }
+        // --- END MODIFIED/CONSOLIDATED ---
 
         // --- Send Updates to Client ---
         GameServer.Instance.SendToPlayer(this.NetworkId, new

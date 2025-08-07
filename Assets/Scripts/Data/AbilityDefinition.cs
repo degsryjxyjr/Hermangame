@@ -117,14 +117,8 @@ public class AbilityDefinition : ScriptableObject
     {
         /// <summary>Physical damage (reduced by Defense)</summary>
         Physical,
-        /// <summary>Magic damage (reduced by Magic Resistance)</summary>
+        /// <summary>Magic damage (reduced by Magic and a bit by Defense)</summary>
         Magic,
-        /// <summary>Fire damage (may interact with fire resistance)</summary>
-        Fire,
-        /// <summary>Ice damage (may slow or freeze targets)</summary>
-        Ice,
-        /// <summary>Lightning damage (may chain between targets)</summary>
-        Lightning,
         /// <summary>Pure damage (bypasses all resistances)</summary>
         Pure
     }
