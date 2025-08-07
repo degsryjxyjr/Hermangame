@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1fbff2781f45cea488ff8d844d61e55e, type: 3}
+  m_Name: GoblinWarrior
+  m_EditorClassIdentifier: 
+  enemyId: goblin_01
+  displayName: Goblin Warrior
+  icon: {fileID: 21300000, guid: e990b430b7bac2a4fbc2267997f6df58, type: 3}
+  modelPrefab: {fileID: 7235997375035445226, guid: 41c87441e45c983488c5e86377aa5e91, type: 3}
+  baseHealth: 100
+  baseAttack: 5
+  baseDefense: 1
+  baseMagic: 0
+  baseActions: 2
+  xpOnDefeat: 50
+  lootTable: []
+  innateAbilities: []
+  startingEquipment:
+  - {fileID: 11400000, guid: c3cffd64c3ec3ed468e60ac1e728ae4c, type: 2}
+  - {fileID: 11400000, guid: 20d3eb609a4f1dd428326e8d80f343dc, type: 2}

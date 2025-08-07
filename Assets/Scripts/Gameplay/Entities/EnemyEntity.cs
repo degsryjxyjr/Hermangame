@@ -114,11 +114,11 @@ public class EnemyEntity : MonoBehaviour, IEntity, IDamageable, IHealable, IActi
     {
         _level = level;
         // Calculate stats based on definition and level
-        MaxHealth = Mathf.FloorToInt(_enemyDefinition.baseHealth * _enemyDefinition.healthGrowth.Evaluate(level));
+        MaxHealth = Mathf.FloorToInt(_enemyDefinition.baseHealth);
         CurrentHealth = MaxHealth; // Start at full health
-        Attack = Mathf.FloorToInt(_enemyDefinition.baseAttack * _enemyDefinition.attackGrowth.Evaluate(level));
-        Defense = Mathf.FloorToInt(_enemyDefinition.baseDefense * _enemyDefinition.defenseGrowth.Evaluate(level));
-        Magic = Mathf.FloorToInt(_enemyDefinition.baseMagic * _enemyDefinition.magicGrowth.Evaluate(level));
+        Attack = Mathf.FloorToInt(_enemyDefinition.baseAttack);
+        Defense = Mathf.FloorToInt(_enemyDefinition.baseDefense);
+        Magic = Mathf.FloorToInt(_enemyDefinition.baseMagic);
 
         XpOnDefeat = _enemyDefinition.xpOnDefeat;
 

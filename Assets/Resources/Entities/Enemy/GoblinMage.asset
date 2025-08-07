@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1fbff2781f45cea488ff8d844d61e55e, type: 3}
+  m_Name: GoblinMage
+  m_EditorClassIdentifier: 
+  enemyId: goblin_mage
+  displayName: Goblin Mage
+  icon: {fileID: 21300000, guid: e990b430b7bac2a4fbc2267997f6df58, type: 3}
+  modelPrefab: {fileID: 7235997375035445226, guid: f7797dd6df16c054f921bf509e1fc1a9, type: 3}
+  baseHealth: 50
+  baseAttack: 0
+  baseDefense: 0
+  baseMagic: 15
+  baseActions: 1
+  xpOnDefeat: 35
+  lootTable: []
+  innateAbilities: []
+  startingEquipment:
+  - {fileID: 11400000, guid: 69927346d4c63504cb76633e9f940e05, type: 2}
+  - {fileID: 11400000, guid: 89a2956f9484fef4e96f861cfc34bc2c, type: 2}

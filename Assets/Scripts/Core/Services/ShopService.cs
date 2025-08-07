@@ -281,7 +281,7 @@ public class ShopService : MonoBehaviour
     [SerializeField] private PlayerInventory _npcPlayerInv; // Assign in Inspector
 
     private SimpleShopInventory _shopInventory; // Use the simplified ShopInventory class
-    private List<LootTable> _allShopLootTables = new List<LootTable>();
+    [SerializeField] private List<LootTable> _allShopLootTables = new List<LootTable>();
     private const string SHOP_NPC_ID = "SHOP_NPC"; // Reserved ID for the shop's "coin stash" in InventoryService
 
     private void Awake()

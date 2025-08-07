@@ -1160,7 +1160,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _coinItemId: coin
-  _lootTablesResourcePath: LootTables
+  _lootTablesResourcePath: LootTables/Shop
   _maxShopItems: 8
   _baseShopMoney: 6
   _shopMoney: 0
@@ -1170,6 +1170,7 @@ MonoBehaviour:
   ShopMoneyText: {fileID: 443369673}
   _npcPlayerInv:
     BagItems: []
+  _allShopLootTables: []
 --- !u!4 &885969968
 Transform:
   m_ObjectHideFlags: 0

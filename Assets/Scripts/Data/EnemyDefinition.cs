@@ -21,16 +21,6 @@ public class EnemyDefinition : ScriptableObject
     [Header("Action Budget")]
     public int baseActions = 1;
 
-
-    [Header("Scaling")]
-    // If you want enemies to get stronger with level (for future encounters)
-    // You can use AnimationCurves or simple multipliers like player classes
-    public AnimationCurve healthGrowth = AnimationCurve.Linear(1, 1, 10, 10); // Example
-    public AnimationCurve attackGrowth = AnimationCurve.Linear(1, 1, 10, 10);
-    public AnimationCurve defenseGrowth = AnimationCurve.Linear(1, 1, 10, 10);
-    public AnimationCurve magicGrowth = AnimationCurve.Linear(1, 1, 10, 10);
-
-    
     // Define potential drops
     [System.Serializable] // Add this attribute to the nested class
     public class LootItem
@@ -71,8 +61,4 @@ public class EnemyDefinition : ScriptableObject
     // If enemies can have predefined equipment
     public List<ItemDefinition> startingEquipment = new List<ItemDefinition>();
 
-    // Add other enemy-specific data like AI behavior type, faction, etc.
-    [Header("Behavior")]
-    public string aiBehaviorType = "BasicMelee"; // Identifier for AI logic
-    // public Faction faction; // If you have a faction system
 }
